@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 class RuleFrontmatter(BaseModel):
     id: str = Field(..., min_length=1)
-    created: str = Field(..., min_length=1)
+    version: str = Field(..., min_length=1)
     trigger: str = Field(..., min_length=1)
     solution: str = Field(..., min_length=1)
 

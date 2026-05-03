@@ -1,18 +1,25 @@
 # AgentMCP / `agent-mcp` — agent reference (v0.1)
 
-This document is the **maintainer contract** for the MCP tool surface. Implementations must match [README.md](README.md).
+This document is the **maintainer contract** for the MCP tool surface.
+Implementations must match [README.md](README.md).
 
 ## Global behavior
 
 - **Transport**: stdio only (`agent-mcp serve`).
-- **Project root**: `AGENT_MCP_ROOT` env, else first parent directory containing `config.toml`.
-- **Secrets / PII**: structured session logs under `~/.agent-mcp/log/` **redact** `memory.text`-like fields.
-- **Filesystem safety**: rule and skill file parameters are **basenames** only; paths and `..` are rejected.
+- **Project root**: `AGENT_MCP_ROOT` env, else first parent directory containing
+  `config.toml`.
+- **Secrets / PII**: structured session logs under `~/.agent-mcp/log/` **redact**
+  `memory.text`-like fields.
+- **Filesystem safety**: rule and skill file parameters are **basenames** only;
+  paths and `..` are rejected.
 
 ## Machine-readable rules audit log
 
-- Append-only JSON Lines: `rules/machine_changelog.jsonl` (alongside `rules/CHANGELOG.md`).
-- `rollback_rule(changelog_id)` replays **inverse** of the selected entry’s `snapshot` (see implementation). It cannot target an entry with `op == "ROLLBACK"`.
+- Append-only JSON Lines: `rules/machine_changelog.jsonl` (alongside
+  `rules/CHANGELOG.md`).
+- `rollback_rule(changelog_id)` replays **inverse** of the selected entry’s
+  `snapshot` (see implementation). It cannot target an entry with `op ==
+  "ROLLBACK"`.
 
 ---
 
@@ -22,21 +29,25 @@ This document is the **maintainer contract** for the MCP tool surface. Implement
 
 **Inputs**: none.
 
-**Outputs**: JSON array of `{ name, description, path }` (`path` is repo-relative under `skills/`).
+**Outputs**: JSON array of `{ name, description, path }` (`path` is repo-
+relative under `skills/`).
 
-**Failures**: skills directory missing; loader scan error (invalid frontmatter, duplicate `name`).
+**Failures**: skills directory missing; loader scan error (invalid frontmatter,
+duplicate `name`).
 
 ---
 
 ## `read_skill`
 
-**Contract**: Return **full Markdown** for one skill (`---` YAML frontmatter + body).
+**Contract**: Return **full Markdown** for one skill (`---` YAML frontmatter +
+body).
 
 **Inputs**: `name` — skill identifier (must equal frontmatter `name`). No paths.
 
 **Outputs**: Markdown string.
 
-**Failures**: unknown name (`KeyError` surfaced to client); `name` containing `/`, `\\`, or `..`.
+**Failures**: unknown name (`KeyError` surfaced to client); `name` containing
+`/`, `\\`, or `..`.
 
 ---
 
@@ -47,7 +58,7 @@ This document is the **maintainer contract** for the MCP tool surface. Implement
 **Inputs**:
 
 - `text` (string, required)
-- `tags` (string array, required) — each must be one of  
+- `tags` (string array, required) — each must be one of
   `problem | decision | pattern | preference | error | note`
 - `source` (string, default `user`)
 

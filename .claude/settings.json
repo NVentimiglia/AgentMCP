@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls d:/Projects/AgentMCP/skills/*.md cat d:/Projects/AgentMCP/src/agent_mcp/rules/loader.py)",
+      "Bash(grep -n \"created\" d:/Projects/AgentMCP/src/agent_mcp/rules/*.py)"
+    ]
+  }
+}

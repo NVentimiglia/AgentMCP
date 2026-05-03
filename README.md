@@ -1,6 +1,7 @@
 # AgentMCP — User Guide
 
-AgentMCP is a local MCP server (`agent-mcp`) that gives you shared skills, memory, and rules across Cursor, Claude Code, and Antigravity.
+AgentMCP is a local MCP server (`agent-mcp`) that gives you shared skills,
+memory, and rules across Cursor, Claude Code, and Antigravity.
 
 ## Overview
 
@@ -38,15 +39,30 @@ AgentMCP is designed for one local user and stdio transport.
                            CHANGELOG.md
 ```
 
+## Project Files
+
+| File | Purpose |
+|------|---------|
+| `CLAUDE.md` | MCP tool contract reference. |
+| `AGENT.md` | MCP tool contract reference. |
+| `README.md` | Human-facing user guide. |
+| `Install.md` | Installation prompt. |
+| `Design.md` | Original design document. |
+
 ## High-Level Features
 
-- **Skills registry**: markdown skills with frontmatter and role-based specialization.
-- **Full skill spec support**: directory-based skills with `SKILL.md` plus optional `references/`, `scripts/`, and `assets/`.
-- **Persistent memory**: searchable memory entries for decisions, patterns, and problems.
-- **Rules engine**: one guardrail per Markdown file under `rules/active/`; proposals in `rules/proposals/`; optional bounded auto mode.
+- **Skills registry**: markdown skills with frontmatter and role-based
+  specialization.
+- **Full skill spec support**: directory-based skills with `SKILL.md` plus
+  optional `references/`, `scripts/`, and `assets/`.
+- **Persistent memory**: searchable memory entries for decisions, patterns, and
+  problems.
+- **Rules engine**: one guardrail per Markdown file under `rules/active/`;
+  proposals in `rules/proposals/`; optional bounded auto mode.
 - **Changelog and rollback**: track rule lifecycle and recover from regressions.
 - **Cross-harness**: same server entry in Cursor, Claude Code, and Antigravity.
-- **Usage metrics**: persistent counters for tool use, per-skill reads, memory stored (including character totals), and rule/problem actions (`get_metrics`).
+- **Usage metrics**: persistent counters for tool use, per-skill reads, memory
+  stored (including character totals), and rule/problem actions (`get_metrics`).
 
 ## MCP Tool Surface
 
@@ -93,9 +109,8 @@ AgentMCP/
   src/agent_mcp/
   config.toml
   skills/
-    roles/
-    prompt-rewriter.md
-    session-start.md
+    <name>/
+      SKILL.md
   rules/
     active/
     proposals/
@@ -109,15 +124,21 @@ AgentMCP/
 
 ### Usage metrics
 
-The server persists aggregate counters in `state/metrics.json` (gitignored alongside other state). Values update on each MCP tool call:
+The server persists aggregate counters in `state/metrics.json` (gitignored
+alongside other state). Values update on each MCP tool call:
 
 - **`tools`**: counts per MCP tool name (including `get_metrics`).
-- **`skills`**: how often a named skill was touched via `read_skill`, `list_skill_files`, or `read_skill_file` (not incremented for `list_skills` alone).
-- **`memory`**: `stores`, `searches`, `reinforces`, and `context_chars_stored` (sum of lengths of texts passed to `memory_store`).
-- **`rules`**: `list`, `propose`, `promote`, `rollback` tallies aligned with rule tools.
+- **`skills`**: how often a named skill was touched via `read_skill`,
+  `list_skill_files`, or `read_skill_file` (not incremented for `list_skills`
+  alone).
+- **`memory`**: `stores`, `searches`, `reinforces`, and `context_chars_stored`
+  (sum of lengths of texts passed to `memory_store`).
+- **`rules`**: `list`, `propose`, `promote`, `rollback` tallies aligned with rule
+  tools.
 - **`problems`**: `flagged` count from `flag_problem`.
 
-Call **`get_metrics`** from your harness anytime to inspect the snapshot. Counters accumulate across server restarts until you delete `metrics.json`.
+Call **`get_metrics`** from your harness anytime to inspect the snapshot.
+Counters accumulate across server restarts until you delete `metrics.json`.
 
 ### 3) Connect a Harness
 
@@ -137,7 +158,8 @@ claude mcp add agent-mcp -- agent-mcp serve
 
 ### Antigravity
 
-In Antigravity, open **Manage MCP Servers**, switch to **View Raw Config**, and add the same `agent-mcp` server block:
+In Antigravity, open **Manage MCP Servers**, switch to **View Raw Config**, and
+add the same `agent-mcp` server block:
 
 ```json
 { "mcpServers": { "agent-mcp": { "command": "agent-mcp", "args": ["serve"] } } }
@@ -161,16 +183,18 @@ Reduces re-discovery and aligns work with prior decisions.
 
 **Manual flow**
 
-1. Run `read_skill("session-start")`.
-2. Summarize your current task.
-3. Call `memory_search(query=<task summary>, k=5)`.
-4. Start work using relevant hits.
+1. Summarize your current task in one line.
+2. Call `memory_search(query=<task summary>, k=5)`.
+3. Start work using relevant hits.
+
+Note: the session-start ritual is defined in `CLAUDE.md` and fires
+automatically in Claude Code. For Cursor and Antigravity, use the
+hook workaround below.
 
 **Automation workaround (Cursor/Antigravity hooks)**
 
 ```text
 onSessionStart:
-  - call_tool: read_skill(name="session-start")
   - prompt_or_derive: task_summary
   - call_tool: memory_search(query="${task_summary}", k=5)
   - attach_results_to_context: top_hits
@@ -188,10 +212,12 @@ Builds institutional memory and reduces repeated mistakes.
 
 **Manual flow**
 
-Call this right after important decisions, tricky fixes, repeatable discoveries, at end-of-task/session, or before context-switching.
+Call this right after important decisions, tricky fixes, repeatable discoveries,
+at end-of-task/session, or before context-switching.
 
 1. Call `memory_store(text, tags, source)`.
-2. Use meaningful tags (`decision`, `pattern`, `preference`, `problem`, `error`, `note`).
+2. Use meaningful tags (`decision`, `pattern`, `preference`, `problem`, `error`,
+   `note`).
 3. Reinforce important items with `memory_reinforce`.
 
 **Automation workaround (`memory_store` hook)**
@@ -217,7 +243,9 @@ Recurring failures should become rules, not repeated toil.
 
 **Manual flow**
 
-Call this every time a meaningful failure occurs (build break, runtime error, flaky test, or repeated operational issue), especially if you think it may happen again.
+Call this every time a meaningful failure occurs (build break, runtime error,
+flaky test, or repeated operational issue), especially if you think it may
+happen again.
 
 1. Call `flag_problem(description, context)` on failure.
 2. Check if a proposal was generated after recurrence threshold.
@@ -287,7 +315,8 @@ scheduledRulesReview:
 
 Skills live under `skills/` and can be authored in two formats:
 
-1. **Legacy single-file** (backward-compatible): `skills/<name>.md` or `skills/roles/<name>.md`
+1. **Legacy single-file** (backward-compatible): `skills/<name>.md` or
+   `skills/roles/<name>.md`
 2. **Spec directory format** (recommended): `skills/<skill-name>/SKILL.md`
 
 Directory format can include:
@@ -369,17 +398,31 @@ allowed-tools: Bash(git:*) Read
 
 ### What rules are
 
-Rules are **persistent guardrails**: short “when X, do Y” commitments for you and the agent.
+Rules are **persistent guardrails**: short “when X, do Y” commitments for you
+and the agent.
 
-- **Compared to skills**: skills are playbooks and procedures (often long). Rules are **narrow triggers + solutions** you want honored whenever that situation comes up.
-- **Compared to memory**: memory is **searchable notes** (many tags, retrieved by query). Rules are **explicitly listed** via `list_rules` and live as small, reviewable files.
+- **Compared to skills**: skills are playbooks and procedures (often long). Rules
+  are **narrow triggers + solutions** you want honored whenever that situation
+  comes up.
+- **Compared to memory**: memory is **searchable notes** (many tags, retrieved by
+  query). Rules are **explicitly listed** via `list_rules` and live as small,
+  reviewable files.
 
 ### How they are stored
 
-- **Many files, not one blob**: each rule is **exactly one** Markdown file with YAML frontmatter (`rules/active/*.md` for live rules, `rules/proposals/*.md` for drafts).
-- **`list_rules`** reads only **`rules/active/`** — every `*.md` there is a separate rule, keyed by frontmatter `id`.
-- If you edit **`rules/active/`** Markdown by hand while `agent-mcp serve` is running, **`list_rules` can stay stale** until you **restart** the MCP server (tool-driven changes such as **`promote_rule`** and **`rollback_rule`** reload the active index when they modify files).
-- **Lifecycle**: create a proposal (tool or hand-written) → review under `rules/proposals/` → **`promote_rule(filename)`** moves that file into `rules/active/` (same basename). Changes are audited for **`rollback_rule`** via `rules/CHANGELOG.md` and `rules/machine_changelog.jsonl`.
+- **Many files, not one blob**: each rule is **exactly one** Markdown file with
+  YAML frontmatter (`rules/active/*.md` for live rules, `rules/proposals/*.md`
+  for drafts).
+- **`list_rules`** reads only **`rules/active/`** — every `*.md` there is a
+  separate rule, keyed by frontmatter `id`.
+- If you edit **`rules/active/`** Markdown by hand while `agent-mcp serve` is
+  running, **`list_rules` can stay stale** until you **restart** the MCP server
+  (tool-driven changes such as **`promote_rule`** and **`rollback_rule`** reload
+  the active index when they modify files).
+- **Lifecycle**: create a proposal (tool or hand-written) → review under
+  `rules/proposals/` → **`promote_rule(filename)`** moves that file into
+  `rules/active/` (same basename). Changes are audited for **`rollback_rule`**
+  via `rules/CHANGELOG.md` and `rules/machine_changelog.jsonl`.
 
 Example active rule file `rules/active/no-secrets-in-logs.md`:
 
@@ -396,18 +439,26 @@ Optional longer context (commands, naming, pointers to scanners).
 
 ### Add Rule
 
-- Preferred path: `propose_rule(trigger, solution, source_session_id)` — writes a new Markdown file under `rules/proposals/` (or directly to `rules/active/` in auto mode, subject to daily cap). The server fills frontmatter: unique `id` (ULID), `created` (date), plus your `trigger` and `solution`.
-- **Manual authoring**: create a `.md` file yourself with the same frontmatter keys (`id`, `created`, `trigger`, `solution`) and a human-readable `id` if you prefer; place it in `rules/proposals/` or `rules/active/` as appropriate.
+- Preferred path: `propose_rule(trigger, solution, source_session_id)` — writes a
+  new Markdown file under `rules/proposals/` (or directly to `rules/active/` in
+  auto mode, subject to daily cap). The server fills frontmatter: unique `id`
+  (ULID), `created` (date), plus your `trigger` and `solution`.
+- **Manual authoring**: create a `.md` file yourself with the same frontmatter
+  keys (`id`, `created`, `trigger`, `solution`) and a human-readable `id` if you
+  prefer; place it in `rules/proposals/` or `rules/active/` as appropriate.
 
 ### Update Rule
 
 - Edit **proposal** files in `rules/proposals/` before promotion.
-- For **active** rules, prefer a **new** proposal that supersedes old guidance (or fix via promotion workflow you choose); avoid silent edits without the changelog story if you care about rollback.
+- For **active** rules, prefer a **new** proposal that supersedes old guidance (or
+  fix via promotion workflow you choose); avoid silent edits without the
+  changelog story if you care about rollback.
 
 ### Remove Rule
 
 - Prefer **`rollback_rule(changelog_id)`** so removal/revert stays auditable.
-- Deleting `rules/active/<file>.md` by hand removes the rule from `list_rules` but **bypasses** the changelog story; use when you knowingly accept that tradeoff.
+- Deleting `rules/active/<file>.md` by hand removes the rule from `list_rules` but
+  **bypasses** the changelog story; use when you knowingly accept that tradeoff.
 
 ## Configuration
 
@@ -467,4 +518,5 @@ Normalization:
 
 ## Scope Notes
 
-v0.1 intentionally excludes sub-agent orchestration, automatic session hooks, and LLM-authored rule generation inside the server.
+v0.1 intentionally excludes sub-agent orchestration, automatic session hooks,
+and LLM-authored rule generation inside the server.

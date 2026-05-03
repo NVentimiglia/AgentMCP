@@ -2,8 +2,8 @@
 id: persona
 version: "2026-05-02"
 trigger: General interaction, coding, and communication.
-solution: Follow the established persona: brief, executive summaries,
-  explicit error handling, and concise communication.
+solution: "Follow the established persona: brief, executive summaries,
+  explicit error handling, and concise communication."
 ---
 
 # Agent Persona

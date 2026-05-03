@@ -9,3 +9,5 @@ memory/
 state/
 .agent-mcp/
 *.db
+/skills/skia
+/skills/scott-plot

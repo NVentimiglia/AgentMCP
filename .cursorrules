@@ -1,0 +1,11 @@
+# AgentMCP Project Rules
+
+When working in this repository, you MUST follow these rituals:
+
+1. **Session Start**: At the beginning of every session, call the
+   `session-start` skill and perform a `memory_search` to retrieve
+   relevant context and continuity.
+2. **Prompt Rewriting**: Use the `prompt-rewriter` skill to refine
+   complex requests and ensure clarity before execution.
+
+Refer to the `skills/` directory for full contract details on these skills.

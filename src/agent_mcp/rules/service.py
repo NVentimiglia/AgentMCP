@@ -107,7 +107,7 @@ class RulesService:
 
         fm = RuleFrontmatter(
             id=rid,
-            created=now,
+            version=now,
             trigger=trigger,
             solution=solution,
         )
