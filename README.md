@@ -3,6 +3,18 @@
 AgentMCP is a local MCP server (`agent-mcp`) that gives you shared skills,
 memory, and rules across Cursor, Claude Code, and Antigravity.
 
+### Insperation
+
+I wanted a way to automate agent self-improvement without the overhead of 
+"heavy" frameworks. While tools like LangGraph, MetaGPT, and Hermes offer
+sophisticated orchestration, they often require a total overhaul of
+existing development workflows.
+
+To avoid this architectural lock-in, I developed a **lightweight,
+harness-agnostic, and model-agnostic MCP server**. It provides the essential
+self-learning logic needed without forcing a change in how you write or
+organize your code.
+
 ## Overview
 
 AgentMCP is designed for one local user and stdio transport.
