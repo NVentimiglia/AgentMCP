@@ -236,7 +236,7 @@ Rule — markdown with frontmatter:
 ```
 ---
 id: ulid
-created: 2026-05-02
+version: 2026-05-02
 trigger: "vague test failures with no traceback"
 solution: "always print pytest --tb=short"
 ---
@@ -353,7 +353,7 @@ id: rule_01HZX...                # ulid, generated on write
 trigger: "vague test failures with no traceback"
 solution: "always run pytest with --tb=short"
 scope: ["skill:reviewer"]        # optional; omitted/empty = global
-created: 2026-05-02T14:00:00Z
+version: 2026-05-02T14:00:00Z
 last_referenced: 2026-05-02T14:00:00Z
 reinforcement_count: 0
 source_session_ids: ["sess_..."]

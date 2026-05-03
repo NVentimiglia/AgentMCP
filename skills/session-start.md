@@ -1,7 +1,15 @@
 ---
 name: session-start
-description: Start-of-session checklist. Run memory_search on your current task, then proceed.
-triggers: ["start", "session", "begin"]
+description: Start-of-session checklist. Check memory for prior context
+  on your current task, then proceed. Triggers: start, session, begin.
 ---
 
-At the start of a working session: (1) Summarize the task in one line. (2) Call `memory_search` with that line and `k=5`. (3) Apply any returned decisions, patterns, or preferences before editing code. (4) If nothing relevant is returned, continue and store useful findings with `memory_store` before you finish.
+At the start of a working session:
+
+1. Summarize the task in one line.
+2. Read `C:\Users\nvent\.claude\projects\d--Projects-AgentMCP\memory\MEMORY.md`
+   and scan for entries relevant to the task.
+3. Apply any returned decisions, patterns, or preferences before
+   editing code.
+4. If no relevant memory exists, proceed normally. Save useful
+   findings to a new memory file before finishing.

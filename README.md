@@ -386,7 +386,7 @@ Example active rule file `rules/active/no-secrets-in-logs.md`:
 ```markdown
 ---
 id: no-secrets-in-logs
-created: "2026-05-02"
+version: "2026-05-02"
 trigger: Logging, traces, or debug output might include API keys, tokens, or passwords
 solution: Redact secrets; log placeholders only; rely on env vars or secret managers.
 ---
