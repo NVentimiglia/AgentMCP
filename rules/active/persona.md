@@ -2,6 +2,7 @@
 id: persona
 version: "2026-05-05"
 trigger: General interaction, coding, and communication.
+solution: Apply preprocessing checks, coding standards, writing norms, MCP memory/rules workflow, and postprocessing checklist in body.
 ---
 
 # Agent Persona
