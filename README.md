@@ -1,10 +1,11 @@
 # SkillsMCP
 
 ## Problem
-- I am vibe coding with multiple agents, each wanting to save duplicated
-  configuration, skill, etc. files in various locations.
-- My projects were starting to look like the
-  [Cursed Repo](https://github.com/Hacksore/cursed-repo).
+I am vibe coding with multiple agents, each wanting to save duplicated
+configurations and skill in various locations. My projects were starting
+to look like the [Cursed Repo](https://github.com/Hacksore/cursed-repo).
+
+To solve this I placed my common rules and skills inside a shared MCP server.
 
 ## Overview
 - Local MCP server (`skills-mcp`) exposes **skills** and **rules** only (stdio MCP).
