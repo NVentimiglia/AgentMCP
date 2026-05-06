@@ -1,0 +1,5 @@
+[paths]
+skills = "skills"
+rules = "rules"
+# Optional: merge a second skill tree — project shadows on naming collisions.
+# shared_skills = ".libraries/skills"

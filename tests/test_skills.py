@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from agent_mcp.server import configure_for_tests, read_skill
-from agent_mcp.skills.loader import SkillIndex
+from skills_mcp.server import configure_for_tests, read_skill
+from skills_mcp.skills.loader import SkillIndex
 
 
 def test_skill_index_rejects_duplicate_names(tmp_path) -> None:
@@ -17,7 +17,7 @@ def test_skill_index_rejects_duplicate_names(tmp_path) -> None:
     (d / "b.md").write_text(
         "---\nname: dup\ndescription: B\ntriggers: []\n---\nBody B\n", encoding="utf-8"
     )
-    ix = SkillIndex(d)
+    ix = SkillIndex(d, project_root=tmp_path)
     with pytest.raises(ValueError, match="duplicate"):
         ix.scan()
 
@@ -25,7 +25,7 @@ def test_skill_index_rejects_duplicate_names(tmp_path) -> None:
 def test_skill_missing_frontmatter_rejected(tmp_path) -> None:
     p = tmp_path / "x.md"
     p.write_text("no frontmatter\n", encoding="utf-8")
-    ix = SkillIndex(tmp_path)
+    ix = SkillIndex(tmp_path, project_root=tmp_path)
     with pytest.raises(ValueError, match="missing"):
         ix.scan()
 
@@ -43,9 +43,13 @@ def test_read_skill_path_injection(project_home) -> None:
 
 
 def test_read_skill_roundtrip(project_home) -> None:
+    (project_home / "skills" / "ping.md").write_text(
+        "---\nname: ping\ndescription: Smoke read_skill\n---\nUse list_skills first.\n",
+        encoding="utf-8",
+    )
     configure_for_tests(project_home)
-    body = read_skill("session-start")
-    assert "memory_search" in body
+    body = read_skill("ping")
+    assert "list_skills" in body
     assert body.startswith("---")
 
 
@@ -75,7 +79,7 @@ def test_directory_skill_spec_and_resources(project_home) -> None:
     (d / "assets" / "template.txt").write_text("template", encoding="utf-8")
 
     configure_for_tests(project_home)
-    from agent_mcp.server import list_skill_files, list_skills, read_skill_file
+    from skills_mcp.server import list_skills, read_skill
 
     skills = json.loads(list_skills())
     item = next(s for s in skills if s["name"] == "pdf-processing")
@@ -84,10 +88,9 @@ def test_directory_skill_spec_and_resources(project_home) -> None:
     assert item["scripts_dir"].endswith("scripts")
     assert item["assets_dir"].endswith("assets")
 
-    refs = json.loads(list_skill_files("pdf-processing", "references"))
-    assert "references/REFERENCE.md" in refs
-    script = read_skill_file("pdf-processing", "scripts/run.py")
-    assert "print('ok')" in script
+    body = read_skill("pdf-processing")
+    assert "Use scripts and references as needed." in body
+    assert (d / "references" / "REFERENCE.md").read_text(encoding="utf-8") == "Reference doc"
 
 
 def test_directory_skill_name_must_match_parent(project_home) -> None:
@@ -97,7 +100,7 @@ def test_directory_skill_name_must_match_parent(project_home) -> None:
         "---\nname: reviewer\ndescription: mismatch name\n---\nBody\n",
         encoding="utf-8",
     )
-    ix = SkillIndex(project_home / "skills")
+    ix = SkillIndex(project_home / "skills", project_root=project_home)
     with pytest.raises(ValueError, match="must match parent directory"):
         ix.scan()
 
@@ -109,14 +112,8 @@ def test_skill_name_constraints_enforced(project_home) -> None:
         "---\nname: Bad-Name\ndescription: invalid case\n---\nBody\n",
         encoding="utf-8",
     )
-    ix = SkillIndex(project_home / "skills")
+    ix = SkillIndex(project_home / "skills", project_root=project_home)
     with pytest.raises(ValueError, match="lowercase letters"):
         ix.scan()
 
 
-def test_read_skill_file_rejects_path_traversal(project_home) -> None:
-    configure_for_tests(project_home)
-    from agent_mcp.server import read_skill_file
-
-    with pytest.raises(ValueError):
-        read_skill_file("session-start", "../secrets.txt")

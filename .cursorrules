@@ -1,11 +1,4 @@
-# AgentMCP Project Rules
+# SkillsMCP Project Rules
 
-When working in this repository, you MUST follow these rituals:
-
-1. **Session Start**: At the beginning of every session, call the
-   `session-start` skill and perform a `memory_search` to retrieve
-   relevant context and continuity.
-2. **Prompt Rewriting**: Use the `prompt-rewriter` skill to refine
-   complex requests and ensure clarity before execution.
-
-Refer to the `skills/` directory for full contract details on these skills.
+1. Start each session by summarizing the task, skim **`rules/*.md`**, honour MCP **`instructions`** when surfaced, call **`list_skills` → `read_skill`** only when a project skill clearly applies.
+2. Keep changes small and idiomatic versus existing `src/skills_mcp/` style.

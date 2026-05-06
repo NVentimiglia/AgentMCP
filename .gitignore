@@ -7,7 +7,7 @@ dist/
 build/
 memory/
 state/
-.agent-mcp/
+.skills-mcp/
 *.db
-/skills/skia
 /skills/scott-plot
+/skills/skia
