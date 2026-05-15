@@ -2,6 +2,13 @@
 
 One source of truth for agent skills, guardrail rules, and behavioral learning — served to every agent via MCP. Skills compound over time. Anti-patterns self-correct. Git is the audit layer.
 
+## Problem
+I am vibe coding with multiple agents, each wanting to save duplicated
+configurations and skill in various locations. My projects were starting
+to look like the [Cursed Repo](https://github.com/Hacksore/cursed-repo).
+
+To solve this I placed my common rules and skills inside a shared MCP server.
+
 ---
 
 ## How It Works
