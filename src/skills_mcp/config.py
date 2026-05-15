@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import tomli
 from pydantic import BaseModel, ConfigDict, Field
@@ -19,18 +18,10 @@ class PathsConfig(BaseModel):
     content: str | None = None
 
 
-class ProjectDocConfig(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    #: Auto-update Project.md on every analyze run (default: true).
-    auto_update: bool = True
-
-
 class AgentConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     paths: PathsConfig = Field(default_factory=PathsConfig)
-    project_doc: ProjectDocConfig = Field(default_factory=ProjectDocConfig)
 
 
 def load_config(root: Path) -> AgentConfig:
@@ -38,10 +29,7 @@ def load_config(root: Path) -> AgentConfig:
     if not path.is_file():
         raise FileNotFoundError(f"Missing config: {path}")
     data = tomli.loads(path.read_text(encoding="utf-8"))
-    return AgentConfig.model_validate({
-        "paths": data.get("paths", {}),
-        "project_doc": data.get("project_doc", {}),
-    })
+    return AgentConfig.model_validate({"paths": data.get("paths", {})})
 
 
 def resolve_path(root: Path, rel: str) -> Path:

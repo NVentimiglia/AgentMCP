@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from skills_mcp.analyze import _read_existing_version, _render_rule, run_analyze
+from skills_mcp.analyze import _read_existing_version, _render_memory_rule, memory_dir, run_analyze
 from skills_mcp.app_state import init_app
 from skills_mcp.cli import cmd_init
 
@@ -42,7 +42,7 @@ def _fake_report(sessions: int = 3, signals=None):
 
 
 # ---------------------------------------------------------------------------
-# Analysis with mocked generate_report
+# analyze writes to .memory/, never to rules/
 # ---------------------------------------------------------------------------
 
 
@@ -54,6 +54,7 @@ def test_analyze_no_sessions(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
         rc = run_analyze(app)
 
     assert rc == 0
+    assert not memory_dir(root).exists() or list(memory_dir(root).glob("dr-*.md")) == []
     assert list((root / "rules").glob("dr-*.md")) == []
 
 
@@ -68,7 +69,7 @@ def test_analyze_no_signals(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     assert list((root / "rules").glob("dr-*.md")) == []
 
 
-def test_analyze_writes_rule_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_analyze_writes_to_memory_not_rules(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     root = _make_project(tmp_path, monkeypatch)
     app = init_app(root)
 
@@ -83,12 +84,15 @@ def test_analyze_writes_rule_files(tmp_path: Path, monkeypatch: pytest.MonkeyPat
         rc = run_analyze(app)
 
     assert rc == 0
-    rules_dir = root / "rules"
-    assert (rules_dir / "dr-correction-heavy.md").is_file()
-    assert (rules_dir / "dr-error-loop.md").is_file()
+    mem = memory_dir(root)
+    assert (mem / "dr-correction-heavy.md").is_file()
+    assert (mem / "dr-error-loop.md").is_file()
+    # must NOT appear in rules/
+    assert not (root / "rules" / "dr-correction-heavy.md").exists()
+    assert not (root / "rules" / "dr-error-loop.md").exists()
 
 
-def test_analyze_rule_frontmatter_valid(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_analyze_memory_frontmatter_valid(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     root = _make_project(tmp_path, monkeypatch)
     app = init_app(root)
 
@@ -100,7 +104,7 @@ def test_analyze_rule_frontmatter_valid(tmp_path: Path, monkeypatch: pytest.Monk
         run_analyze(app)
 
     from skills_mcp.rules.loader import parse_rule_md
-    parsed = parse_rule_md(root / "rules" / "dr-edit-thrashing.md")
+    parsed = parse_rule_md(memory_dir(root) / "dr-edit-thrashing.md")
     assert parsed.fm.id == "dr-edit-thrashing"
     assert parsed.fm.version == "1"
     assert "edit" in parsed.fm.trigger.lower()
@@ -110,7 +114,6 @@ def test_analyze_rule_frontmatter_valid(tmp_path: Path, monkeypatch: pytest.Monk
 def test_analyze_version_increments_on_rerun(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     root = _make_project(tmp_path, monkeypatch)
     app = init_app(root)
-    # Disable cooldown so two back-to-back runs are both allowed.
     monkeypatch.setattr("skills_mcp.analyze.ANALYZE_COOLDOWN_SECONDS", 0)
 
     signals = [_fake_signal("keep-going-loop", "medium")]
@@ -122,11 +125,11 @@ def test_analyze_version_increments_on_rerun(tmp_path: Path, monkeypatch: pytest
         run_analyze(app)
 
     from skills_mcp.rules.loader import parse_rule_md
-    parsed = parse_rule_md(root / "rules" / "dr-keep-going-loop.md")
+    parsed = parse_rule_md(memory_dir(root) / "dr-keep-going-loop.md")
     assert parsed.fm.version == "2"
 
 
-def test_analyze_unknown_signal_gets_fallback_rule(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_analyze_unknown_signal_gets_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     root = _make_project(tmp_path, monkeypatch)
     app = init_app(root)
 
@@ -138,9 +141,9 @@ def test_analyze_unknown_signal_gets_fallback_rule(tmp_path: Path, monkeypatch: 
         run_analyze(app)
 
     from skills_mcp.rules.loader import parse_rule_md
-    parsed = parse_rule_md(root / "rules" / "dr-some-future-signal.md")
+    parsed = parse_rule_md(memory_dir(root) / "dr-some-future-signal.md")
     assert parsed.fm.id == "dr-some-future-signal"
-    assert parsed.fm.solution  # fallback text present
+    assert parsed.fm.solution
 
 
 def test_analyze_git_diff_shown(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
@@ -148,7 +151,7 @@ def test_analyze_git_diff_shown(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     app = init_app(root)
 
     signals = [_fake_signal("correction-heavy", "high")]
-    fake_diff = MagicMock(stdout="+++ b/rules/dr-correction-heavy.md\n+new content", returncode=0)
+    fake_diff = MagicMock(stdout="+++ b/.memory/dr-correction-heavy.md\n+new content", returncode=0)
     fake_status = MagicMock(stdout="", returncode=0)
 
     with (
@@ -158,8 +161,34 @@ def test_analyze_git_diff_shown(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
         run_analyze(app)
 
     captured = capsys.readouterr()
-    assert "git diff rules/" in captured.out
+    assert ".memory/" in captured.out
     assert "dr-correction-heavy" in captured.out
+
+
+def test_analyze_external_project_writes_to_its_memory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """analyze with project_root writes to that project's .memory/, not app.root."""
+    server_root = tmp_path / "AgentMCP"
+    server_root.mkdir()
+    ext_root = tmp_path / "MyApp"
+    ext_root.mkdir()
+
+    monkeypatch.setenv("SKILLS_MCP_ROOT", str(server_root))
+    monkeypatch.chdir(server_root)
+    cmd_init(server_root)
+    (server_root / "config.toml").write_text(_TEST_CONFIG, encoding="utf-8")
+    app = init_app(server_root)
+
+    signals = [_fake_signal("error-loop", "high")]
+    with (
+        patch("skills_mcp.analyze.generate_report", return_value=_fake_report(sessions=2, signals=signals)),
+        patch("skills_mcp.analyze.subprocess.run", return_value=MagicMock(stdout="", returncode=0)),
+    ):
+        run_analyze(app, project_root=ext_root)
+
+    assert (memory_dir(ext_root) / "dr-error-loop.md").is_file()
+    assert not memory_dir(server_root).exists() or not (memory_dir(server_root) / "dr-error-loop.md").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -177,8 +206,8 @@ def test_read_existing_version_from_file(tmp_path: Path) -> None:
     assert _read_existing_version(p) == 3
 
 
-def test_render_rule_parseable(tmp_path: Path) -> None:
-    content = _render_rule(
+def test_render_memory_rule_parseable(tmp_path: Path) -> None:
+    content = _render_memory_rule(
         rule_id="dr-correction-heavy",
         version=1,
         trigger="user corrects agent frequently",

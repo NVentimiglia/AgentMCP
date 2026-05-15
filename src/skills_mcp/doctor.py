@@ -62,12 +62,6 @@ def run_doctor() -> int:
         if not d.exists():
             fatal.append(f"missing directory: {d}")
 
-    if not (root / "Project.md").is_file():
-        warn.append(
-            "Project.md not found — run `skills-mcp init` to scaffold it, "
-            "or create it manually for project-level agent context"
-        )
-
     if not hook_installed(root):
         warn.append(
             "Claude Code Stop hook not installed — run `skills-mcp hooks install` "

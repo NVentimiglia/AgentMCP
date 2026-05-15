@@ -27,9 +27,6 @@ def cmd_init(target: Path) -> None:
     if not cfg_dst.is_file():
         shutil.copy2(BUNDLED / "config.toml", cfg_dst)
 
-    proj_dst = target / "Project.md"
-    if not proj_dst.is_file():
-        shutil.copy2(BUNDLED / "Project.md", proj_dst)
 
 
 def cmd_serve() -> None:

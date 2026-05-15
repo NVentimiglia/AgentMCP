@@ -55,26 +55,15 @@ def configure(root: Path | None = None) -> AppContext:
     return _APP
 
 
-def _read_project_doc_text(root: Path) -> str | None:
-    """Return ``Project.md`` content if the file exists, else ``None``."""
-    p = root / "Project.md"
-    if p.is_file():
-        try:
-            return p.read_text(encoding="utf-8")
-        except OSError:
-            return None
-    return None
+def _resolve_memory_dir(project_path: str, app: AppContext) -> Path:
+    """Return the ``.memory/`` directory for the given project.
 
-
-def _resolve_project_doc_path(project_path: str, app: AppContext) -> Path:
-    """Resolve the Project.md path from an optional caller-supplied project_path.
-
-    If ``project_path`` is given the agent is working in a different project and
-    we read/write ``Project.md`` there.  Falls back to the MCP server's own root.
+    ``project_path`` should be the absolute path of the project the agent is
+    working in.  Falls back to ``app.root`` when omitted.
     """
-    if project_path and project_path.strip():
-        return Path(project_path.strip()).resolve() / "Project.md"
-    return app.root / "Project.md"
+    from skills_mcp.analyze import memory_dir
+    root = Path(project_path.strip()).resolve() if project_path and project_path.strip() else app.root
+    return memory_dir(root)
 
 
 def _sync_mcp_session_instructions(idx: ActiveRuleIndex) -> None:
@@ -257,55 +246,85 @@ def read_rules(rule_id: str, session_note: str = "") -> str:
     )
 
 
-def _impl_read_project_doc(project_path: str) -> str:
+def _impl_list_memory(project_path: str) -> str:
     _, _, _, app = _require_runtime()
-    p = _resolve_project_doc_path(project_path, app)
+    mem = _resolve_memory_dir(project_path, app)
+    if not mem.is_dir():
+        return "[]"
+    files = sorted(p.name for p in mem.glob("*.md"))
+    return json.dumps(files, ensure_ascii=False)
+
+
+@mcp.tool()
+def list_memory(project_path: str = "", session_note: str = "") -> str:
+    """List memory file names in ``<project>/.memory/``.
+
+    Pass ``project_path`` as the absolute path of the project you are working in.
+    Memory files are project-local learnings: behavioral signals (``dr-*.md``),
+    decisions, open threads, and any context worth keeping between sessions.
+    """
+    return _run_traced(
+        "list_memory",
+        ("_tools", "list_memory"),
+        {"project_path": project_path, "session_note": session_note},
+        session_note,
+        lambda: _impl_list_memory(project_path),
+    )
+
+
+def _impl_read_memory(project_path: str, name: str) -> str:
+    _, _, _, app = _require_runtime()
+    mem = _resolve_memory_dir(project_path, app)
+    if not name.endswith(".md"):
+        name = name + ".md"
+    p = mem / name
     if not p.is_file():
-        return (
-            f"(No Project.md found at {p.parent} — "
-            "call write_project_doc to create project memory.)"
-        )
+        return f"(No memory file '{name}' found — call list_memory to see available files.)"
     return p.read_text(encoding="utf-8")
 
 
 @mcp.tool()
-def read_project_doc(project_path: str = "", session_note: str = "") -> str:
-    """Return the contents of ``Project.md`` for the given project (project-level memory).
+def read_memory(name: str, project_path: str = "", session_note: str = "") -> str:
+    """Read one memory file from ``<project>/.memory/<name>.md``.
 
-    Pass ``project_path`` as the absolute path to the project you are currently working in
-    (e.g. ``D:/Projects/MyApp``).  Omit to read from the MCP server's own root.
+    Use ``list_memory`` first to see what files exist.
+    Pass ``project_path`` as the absolute path of the project you are working in.
     """
     return _run_traced(
-        "read_project_doc",
-        ("_tools", "read_project_doc"),
-        {"project_path": project_path, "session_note": session_note},
+        "read_memory",
+        ("_tools", "read_memory"),
+        {"name": name, "project_path": project_path, "session_note": session_note},
         session_note,
-        lambda: _impl_read_project_doc(project_path),
+        lambda: _impl_read_memory(project_path, name),
     )
 
 
-def _impl_write_project_doc(project_path: str, content: str) -> str:
+def _impl_write_memory(project_path: str, name: str, content: str) -> str:
     _, _, _, app = _require_runtime()
-    p = _resolve_project_doc_path(project_path, app)
-    p.parent.mkdir(parents=True, exist_ok=True)
+    mem = _resolve_memory_dir(project_path, app)
+    mem.mkdir(parents=True, exist_ok=True)
+    if not name.endswith(".md"):
+        name = name + ".md"
+    p = mem / name
     p.write_text(content, encoding="utf-8")
-    return f"Project.md written ({len(content)} chars) -> {p}"
+    return f"memory written ({len(content)} chars) -> {p}"
 
 
 @mcp.tool()
-def write_project_doc(content: str, project_path: str = "", session_note: str = "") -> str:
-    """Write (create or replace) ``Project.md`` for the given project.
+def write_memory(name: str, content: str, project_path: str = "", session_note: str = "") -> str:
+    """Write a memory file to ``<project>/.memory/<name>.md``.
 
-    Pass ``project_path`` as the absolute path to the project you are working in.
-    Use this to persist project context, decisions, and notes between sessions.
-    The file is also auto-updated with a status block by ``skills-mcp analyze``.
+    Use this to save decisions, open threads, context, or any learning that
+    should persist into the next session.  ``name`` is the filename without
+    extension (e.g. ``decisions``, ``context``, ``open-threads``).
+    Pass ``project_path`` as the absolute path of the project you are working in.
     """
     return _run_traced(
-        "write_project_doc",
-        ("_tools", "write_project_doc"),
-        {"project_path": project_path, "session_note": session_note},
+        "write_memory",
+        ("_tools", "write_memory"),
+        {"name": name, "project_path": project_path, "session_note": session_note},
         session_note,
-        lambda: _impl_write_project_doc(project_path, content),
+        lambda: _impl_write_memory(project_path, name, content),
     )
 
 

@@ -1,8 +1,10 @@
 """Behavioral analysis via vendored gemini-docter (skills_mcp/dr/).
 
-Reads Claude Code session transcripts (~/.claude/projects/), runs signal
-detection, writes/updates rules/dr-*.md with SkillsMCP frontmatter,
-then prints `git diff rules/` for audit. No human-in-the-loop.
+Reads session transcripts (Claude Code, Gemini, Cursor), detects behavioral
+signals, and writes dr-*.md into the calling project's ``.memory/`` folder.
+
+``.memory/`` is project-local.  AgentMCP's own ``rules/`` is never touched
+by this module — that directory holds hand-authored global guardrails only.
 
 Usage:
     skills-mcp analyze
@@ -24,8 +26,6 @@ from skills_mcp.lockfile import AnalyzeLock, DEFAULT_COOLDOWN_SECONDS
 # Patchable in tests via monkeypatch.setattr("skills_mcp.analyze.ANALYZE_COOLDOWN_SECONDS", 0)
 ANALYZE_COOLDOWN_SECONDS: int = DEFAULT_COOLDOWN_SECONDS
 
-# Attempt module-level import so tests can patch `skills_mcp.analyze.generate_report`.
-# If vaderSentiment (required by the sentiment signal) is not installed, degrade gracefully.
 try:
     from skills_mcp.dr.analyzer import generate_report
     _DR_AVAILABLE = True
@@ -33,7 +33,6 @@ except ImportError:
     generate_report = None  # type: ignore[assignment]
     _DR_AVAILABLE = False
 
-# Maps gemini-docter signal names to SkillsMCP rule trigger/solution text.
 _SIGNAL_META: dict[str, dict[str, str]] = {
     "correction-heavy": {
         "trigger": "agent makes mistakes requiring frequent user correction (>20% of messages)",
@@ -114,13 +113,19 @@ _SIGNAL_META: dict[str, dict[str, str]] = {
     },
 }
 
+MEMORY_DIR_NAME = ".memory"
 
-def _read_existing_version(rule_path: Path) -> int:
-    """Return the numeric version from an existing dr rule file, or 0 if absent/unparseable."""
-    if not rule_path.is_file():
+
+def memory_dir(project_root: Path) -> Path:
+    """Return the ``.memory/`` path for a project root."""
+    return project_root / MEMORY_DIR_NAME
+
+
+def _read_existing_version(path: Path) -> int:
+    if not path.is_file():
         return 0
     try:
-        txt = rule_path.read_text(encoding="utf-8")
+        txt = path.read_text(encoding="utf-8")
         m = re.match(r"^---\s*\n(.*?)\n---", txt, re.DOTALL)
         if not m:
             return 0
@@ -130,7 +135,7 @@ def _read_existing_version(rule_path: Path) -> int:
         return 0
 
 
-def _render_rule(
+def _render_memory_rule(
     *,
     rule_id: str,
     version: int,
@@ -173,113 +178,31 @@ def _render_rule(
     return "\n".join(fm_lines + body_lines)
 
 
-_PROJECT_DOC_BEGIN = "<!-- skills-mcp:begin -->"
-_PROJECT_DOC_END = "<!-- skills-mcp:end -->"
-
-_PROJECT_DOC_TEMPLATE = """\
-# Project
-
-<!-- Add project-specific context here. This file is injected into every MCP session. -->
-
-"""
-
-
-def _update_project_doc(
-    app: AppContext,
-    *,
-    sessions_analyzed: int,
-    signal_names: list[str],
-    generated_at: str,
-    project_root: Path | None = None,
-) -> None:
-    """Write/update the auto-managed status block inside ``Project.md``.
-
-    ``project_root`` overrides ``app.root`` so the hook can target whichever
-    project the agent is currently working in.  User content outside the
-    ``<!-- skills-mcp:begin/end -->`` markers is preserved.
-    """
-    p = (project_root or app.root) / "Project.md"
-
-    # Read existing content or seed from template.
-    if p.is_file():
-        existing = p.read_text(encoding="utf-8")
-    else:
-        existing = _PROJECT_DOC_TEMPLATE
-
-    # Build the auto-managed block.
-    skills_dir = app.skills_dir
-    rules_dir = app.rules_dir
-    skills_count = len(list(skills_dir.glob("*.md"))) if skills_dir.is_dir() else 0
-    rules_count = len(list(rules_dir.glob("*.md"))) if rules_dir.is_dir() else 0
-
-    signal_list = (
-        "\n".join(f"  - `{s}`" for s in sorted(signal_names))
-        if signal_names
-        else "  _(none detected)_"
-    )
-
-    auto_block = (
-        f"{_PROJECT_DOC_BEGIN}\n"
-        f"## Status _(auto-updated by `skills-mcp analyze`)_\n\n"
-        f"- **Last analyze:** {generated_at}\n"
-        f"- **Sessions analyzed:** {sessions_analyzed}\n"
-        f"- **Skills:** {skills_count}  |  **Rules:** {rules_count}\n"
-        f"- **Active signals:**\n{signal_list}\n"
-        f"{_PROJECT_DOC_END}\n"
-    )
-
-    # Replace existing managed block, or append if absent.
-    begin_idx = existing.find(_PROJECT_DOC_BEGIN)
-    end_idx = existing.find(_PROJECT_DOC_END)
-
-    if begin_idx != -1 and end_idx != -1 and end_idx > begin_idx:
-        new_text = existing[:begin_idx] + auto_block + existing[end_idx + len(_PROJECT_DOC_END):].lstrip("\n")
-    else:
-        new_text = existing.rstrip("\n") + "\n\n" + auto_block
-
-    p.write_text(new_text, encoding="utf-8")
-
-
-def _git_diff_rules(project_root: Path, rules_dir: Path) -> str:
-    """Return combined `git diff` + `git status --short` output for rules/."""
+def _git_diff_memory(project_root: Path, mem_dir: Path) -> str:
     try:
-        rel = rules_dir.relative_to(project_root)
+        rel = mem_dir.relative_to(project_root)
     except ValueError:
-        rel = rules_dir
+        rel = mem_dir
 
-    diff = subprocess.run(
-        ["git", "diff", str(rel)],
-        cwd=project_root,
-        capture_output=True,
-        text=True,
-    )
-    status = subprocess.run(
-        ["git", "status", "--short", str(rel)],
-        cwd=project_root,
-        capture_output=True,
-        text=True,
-    )
+    diff = subprocess.run(["git", "diff", str(rel)], cwd=project_root, capture_output=True, text=True)
+    status = subprocess.run(["git", "status", "--short", str(rel)], cwd=project_root, capture_output=True, text=True)
     out = diff.stdout.strip()
     new_files = [line for line in status.stdout.splitlines() if line.startswith("??")]
     if new_files:
         if out:
             out += "\n"
-        out += "\n".join(new_files) + "\n(new files — run `git add rules/` to stage)"
+        out += "\n".join(new_files) + "\n(new files — run `git add .memory/` to stage)"
     return out or "(no changes)"
 
 
 def run_analyze(app: AppContext, *, project_root: Path | None = None) -> int:
-    """Run behavioral analysis and write/update rules/dr-*.md.
+    """Run behavioral analysis and write dr-*.md to ``<project>/.memory/``.
 
-    ``project_root`` is the project the agent is currently working in.
-    When set, ``Project.md`` is written there instead of ``app.root``.
-    Returns 0 on success, 1 on error.
+    ``project_root`` is the project the agent is working in (CWD when the
+    hook fires).  Omit to use ``app.root``.
     """
     if not _DR_AVAILABLE:
-        print(
-            "analyze: vaderSentiment not installed.\n"
-            "  Run: pip install -e '.[dr]'"
-        )
+        print("analyze: vaderSentiment not installed.\n  Run: pip install -e '.[dr]'")
         return 1
 
     lock = AnalyzeLock(app.state_dir, cooldown_seconds=ANALYZE_COOLDOWN_SECONDS)
@@ -298,10 +221,9 @@ def run_analyze(app: AppContext, *, project_root: Path | None = None) -> int:
 
 
 def _run_analyze_inner(app: AppContext, *, project_root: Path | None = None) -> int:
-    """Analyze body — called only when the lock is held."""
     effective_root = project_root or app.root
     project_name = effective_root.name
-    print(f"analyze: scanning Claude Code sessions for '{project_name}' ...")
+    print(f"analyze: scanning sessions for '{project_name}' ...")
 
     try:
         report = generate_report(providers=["claude", "gemini", "cursor"], project_filter=project_name)
@@ -310,22 +232,15 @@ def _run_analyze_inner(app: AppContext, *, project_root: Path | None = None) -> 
         return 1
 
     if report.total_sessions == 0:
-        print(
-            "analyze: no Claude Code sessions found\n"
-            "  (expected at ~/.claude/projects/)"
-        )
+        print("analyze: no sessions found  (expected at ~/.claude/projects/)")
         return 0
 
-    print(
-        f"analyze: {report.total_sessions} session(s) analyzed, "
-        f"{len(report.top_signals)} signal(s) detected"
-    )
+    print(f"analyze: {report.total_sessions} session(s), {len(report.top_signals)} signal(s)")
 
     if not report.top_signals:
-        print("analyze: no signals — rules unchanged")
+        print("analyze: no signals — .memory/ unchanged")
         return 0
 
-    # Aggregate by signal name across all sessions
     sig_counts: dict[str, int] = defaultdict(int)
     sig_severities: dict[str, list[str]] = defaultdict(list)
     sig_examples: dict[str, list[str]] = defaultdict(list)
@@ -335,26 +250,21 @@ def _run_analyze_inner(app: AppContext, *, project_root: Path | None = None) -> 
         sig_severities[sig.signal_name].append(sig.severity)
         sig_examples[sig.signal_name].extend(sig.examples)
 
-    # Write/update rules/dr-*.md — one file per signal
-    rules_dir = app.rules_dir
-    rules_dir.mkdir(parents=True, exist_ok=True)
+    mem = memory_dir(effective_root)
+    mem.mkdir(parents=True, exist_ok=True)
     generated_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     written: list[str] = []
     for signal_name, count in sorted(sig_counts.items()):
         rule_id = f"dr-{signal_name}"
-        rule_path = rules_dir / f"{rule_id}.md"
-
+        rule_path = mem / f"{rule_id}.md"
         meta = _SIGNAL_META.get(signal_name, {})
-        trigger = meta.get("trigger", f"{signal_name} pattern detected in session")
-        solution = meta.get("solution", f"Address the {signal_name} anti-pattern.")
-
         version = _read_existing_version(rule_path) + 1
-        content = _render_rule(
+        content = _render_memory_rule(
             rule_id=rule_id,
             version=version,
-            trigger=trigger,
-            solution=solution,
+            trigger=meta.get("trigger", f"{signal_name} pattern detected in session"),
+            solution=meta.get("solution", f"Address the {signal_name} anti-pattern."),
             signal_name=signal_name,
             count=count,
             severities=sig_severities[signal_name],
@@ -365,21 +275,7 @@ def _run_analyze_inner(app: AppContext, *, project_root: Path | None = None) -> 
         rule_path.write_text(content, encoding="utf-8")
         written.append(rule_path.name)
 
-    print(f"analyze: wrote {len(written)} rule file(s): {', '.join(written)}")
-
-    # Update Project.md status block if auto_update is enabled (default: true).
-    if app.config.project_doc.auto_update:
-        _update_project_doc(
-            app,
-            sessions_analyzed=report.total_sessions,
-            signal_names=list(sig_counts.keys()),
-            generated_at=generated_at,
-            project_root=project_root,
-        )
-        print("analyze: Project.md status updated")
-
-    # Git diff for audit — no prompts, just show what changed
-    print("\n--- git diff rules/ ---")
-    print(_git_diff_rules(effective_root, rules_dir))
-
+    print(f"analyze: wrote {len(written)} memory file(s): {', '.join(written)}")
+    print(f"\n--- git diff {MEMORY_DIR_NAME}/ ---")
+    print(_git_diff_memory(effective_root, mem))
     return 0

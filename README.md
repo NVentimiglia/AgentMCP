@@ -14,18 +14,33 @@ To solve this I placed my common rules and skills inside a shared MCP server.
 ## How It Works
 
 ```
-skills/*.md ──┐
-rules/*.md ───┼──► MCP server ──► Claude Code / Cursor / Gemini CLI / any MCP agent
-instructions ─┘
+AgentMCP/
+  skills/*.md  ──► global packages — loaded on demand via list_skills / read_skill
+  rules/*.md   ──► global personality — injected into every session automatically
 
-sessions/*.md ──► learn pass (manual) ──► skills/*.md
-agent turns   ──► analyze   (auto)    ──► rules/dr-*.md
+MyApp/  (any project using this MCP server)
+  .memory/*.md ──► project-local learnings — loaded on demand via list_memory / read_memory
+                   written by analyze (dr-*.md) and by the agent (decisions, context, …)
 ```
 
-**Skills** are reusable Markdown docs served to agents on demand.
-**Rules** are guardrail instructions injected into every MCP session automatically.
-**Sessions** are raw conversation logs distilled periodically into skills.
-**Analyze** reads transcripts from Claude Code, Cursor, and Gemini CLI, detects behavioral anti-patterns, and writes them back as rules — no human required.
+**Skills** are global reusable patterns served on demand.
+**Rules** are global guardrails injected automatically into every session.
+**Memories** are project-local learnings: behavioral signals from analyze, decisions, open threads — loaded like skills but scoped to the project.
+
+```
+agent turns   ──► analyze (auto)    ──► MyApp/.memory/dr-*.md
+sessions/*.md ──► learn pass (manual) ──► skills/*.md  (or .memory/*.md)
+```
+
+---
+
+## Three Tiers
+
+| Tier | Location | Scope | Written by |
+| --- | --- | --- | --- |
+| **Rules** | `AgentMCP/rules/*.md` | Global — every session | Human (hand-authored guardrails) |
+| **Skills** | `AgentMCP/skills/*.md` | Global — loaded on demand | Human + learn pass |
+| **Memories** | `<project>/.memory/*.md` | Project-local — loaded on demand | Agent + analyze |
 
 ---
 
@@ -37,14 +52,13 @@ agent turns   ──► analyze   (auto)    ──► rules/dr-*.md
 work with agents
   → save conversation to sessions/YYYY-MM-DD-topic.md
   → 3+ sessions ready?
-      → run learn pass in Claude Code: "run the learn pass"
+      → run learn pass: "run the learn pass"
       → git diff skills/
       → commit keepers, revert noise
   → restart skills-mcp serve to pick up new skills
 ```
 
 Cadence: whenever `sessions_pending` reaches 3+. Check with `get_usage_counters`.
-The learn pass reads `skills/index.md`, updates existing skills, creates new ones, and promotes stubs from `skills/_candidates.md`.
 
 ### Loop 2 — Behavioral Analysis (automatic)
 
@@ -52,14 +66,14 @@ The learn pass reads `skills/index.md`, updates existing skills, creates new one
 agent turn ends
   → hook fires: skills-mcp analyze
       → lock held or cooldown active? → skip silently
+      → detect CWD — is it a different project than AgentMCP?
       → scan transcripts: Claude ~/.claude/projects/
-                          Gemini ~/.gemini-docter/transcripts/ (captured locally by hook)
+                          Gemini ~/.gemini-docter/transcripts/
                           Cursor workspaceStorage/**/*.vscdb
       → detect signals (correction-heavy, error-loop, edit-thrashing, …)
-      → write/update rules/dr-*.md (version increments each run)
-      → git diff rules/
+      → write/update <project>/.memory/dr-*.md
+      → git diff .memory/
       → stamp + release lock
-  → git add rules/ && git commit when diff looks right
 ```
 
 Cadence: automatic after every agent turn. Protected by PID lock + 60-minute cooldown.
@@ -69,10 +83,10 @@ Cadence: automatic after every agent turn. Protected by PID lock + 60-minute coo
 ```
 skills-mcp serve
   → agent connects via MCP
-  → rules/*.md + session rituals injected as instructions
-  → agent calls read_project_doc(project_path) at session start
-  → list_skills / read_skill served on demand
-  → write_project_doc persists decisions at session end
+  → rules/*.md injected as session instructions
+  → instructions include session rituals (load memory, use skills, save at end)
+  → list_skills / read_skill served on demand (global)
+  → list_memory / read_memory / write_memory served on demand (project-local)
   → get_usage_counters reports metrics + learn-loop status
 ```
 
@@ -94,21 +108,19 @@ skills-mcp serve
 
 ### Session start (agent does this automatically)
 
-The MCP `instructions` tell the agent to:
+MCP `instructions` tell the agent to:
 
-1. Call `read_project_doc(project_path=<cwd>)` — load project memory
-2. Call `list_skills` — see what skills apply
-3. Apply active rules (already injected into instructions)
+1. `list_memory(project_path=<cwd>)` — load project-local learnings
+2. `list_skills` — check for applicable global skills
+3. Apply active rules (already injected)
 
 ### Session end (agent prompts you)
 
 At the end of a session with a notable pattern, correction, or decision:
 
-1. Save the conversation → `sessions/YYYY-MM-DD-topic.md`
-2. Agent calls `write_project_doc` to persist context for next session
+1. Agent calls `write_memory(name, content, project_path)` — saves to `.memory/`
+2. Save conversation → `sessions/YYYY-MM-DD-topic.md` if worth a learn pass
 3. If `sessions_pending` ≥ 3 → run the learn pass
-
-No format required for session files. The learn pass handles extraction.
 
 ### Learn pass (manual, when sessions_pending ≥ 3)
 
@@ -116,34 +128,29 @@ No format required for session files. The learn pass handles extraction.
 2. `git diff skills/` — review every change
 3. Commit what's right, revert what isn't
 
-Check status anytime:
-
 ```
 get_usage_counters → learn_loop.sessions_pending: 4
                    → learn_loop.last_learn_pass:  2026-05-10T14:23:00Z
 ```
 
-### Behavioral rules (automatic, review periodically)
+### Behavioral memory (automatic, review periodically)
 
-Rules update in the background after each turn. Review when the diff looks interesting:
+Memory files update in the background after each turn. Review when ready:
 
 ```bash
-git diff rules/
-git add rules/ && git commit -m "chore: update behavioral rules"
+git diff .memory/
+git add .memory/ && git commit -m "chore: update project memory"
 ```
 
 ---
 
 ## Agent Integrations
 
-`skills-mcp analyze` reads transcripts from all available providers on every run.
-
 | Agent | Transcript source | Hook setup |
 | --- | --- | --- |
 | **Claude Code** | `~/.claude/projects/*.jsonl` (written automatically) | `skills-mcp hooks install` → Stop hook in `.claude/settings.local.json` |
 | **Cursor** | `workspaceStorage/**/*.vscdb` (SQLite, read directly) | None — works automatically |
 | **Gemini CLI** | `~/.gemini-docter/transcripts/*.jsonl` (captured locally by hook) | `skills-mcp hooks install --provider gemini` → `afterEachTurn` in `~/.gemini/settings.json` |
-| Antigravity | — | Not yet supported |
 
 All active providers are scanned on every analyze run. Missing or empty sources are silently skipped.
 
@@ -151,7 +158,7 @@ All active providers are scanned on every analyze run. Missing or empty sources 
 
 ## Behavioral Signals
 
-Signal detectors are vendored from [gemini-docter](https://github.com/NVentimiglia/gemini-docter). Each detected signal writes or updates a `rules/dr-<signal>.md` file.
+Signal detectors are vendored from [gemini-docter](https://github.com/NVentimiglia/gemini-docter). Each detected signal writes or updates a `.memory/dr-<signal>.md` file in the calling project.
 
 | Signal | Fires when |
 | --- | --- |
@@ -165,7 +172,7 @@ Signal detectors are vendored from [gemini-docter](https://github.com/NVentimigl
 | `edit-thrashing` | Same file edited 5+ times |
 | `negative-sentiment` | Persistent negative sentiment (VADER) |
 
-Rule files include signal name, severity, occurrence count, examples, and sessions analyzed. Version increments on each run.
+Memory files include signal name, severity, occurrence count, examples, and sessions analyzed. Version increments on each run.
 
 ---
 
@@ -190,8 +197,8 @@ State files live in `state/` (gitignored).
 
 ```json
 {
-  "by_tool": { "list_skills": 12, "read_skill": 34, "verify_setup": 1, ... },
-  "total": 47,
+  "by_tool": { "list_skills": 12, "read_skill": 34, "list_memory": 8, ... },
+  "total": 54,
   "learn_loop": {
     "skills_count": 18,
     "sessions_total": 7,
@@ -200,8 +207,6 @@ State files live in `state/` (gitignored).
   }
 }
 ```
-
-Call counts are also persisted to `usage_counters.json`. Each tool call writes a markdown blob to `logs/`. Both are gitignored.
 
 ---
 
@@ -225,7 +230,7 @@ skills-mcp serve
 | `skills-mcp init [path]` | Scaffold `skills/`, `rules/`, `state/`, `config.toml` |
 | `skills-mcp serve` | Run MCP server over stdio |
 | `skills-mcp doctor` | Verify layout, config, Cursor MCP entry, and hooks |
-| `skills-mcp analyze` | Scan transcripts, detect signals, write `rules/dr-*.md` |
+| `skills-mcp analyze` | Scan transcripts, detect signals, write `<project>/.memory/dr-*.md` |
 | `skills-mcp hooks install` | Install Claude Code Stop hook |
 | `skills-mcp hooks install --provider gemini` | Install Gemini CLI capture + trigger hooks |
 
@@ -234,26 +239,14 @@ skills-mcp serve
 | Tool | Returns |
 | --- | --- |
 | `verify_setup` | Paths, skill/rule counts, issues |
-| `list_skills` | Skill metadata (name, description, path) |
-| `read_skill(name)` | Full Markdown for one skill |
-| `list_rules` | Rule metadata (id, trigger, file) |
-| `read_rules(id)` | Full Markdown for one rule |
+| `list_skills` | Global skill metadata (name, description, path) |
+| `read_skill(name)` | Full Markdown for one global skill |
+| `list_rules` | Global rule metadata (id, trigger, file) |
+| `read_rules(id)` | Full Markdown for one global rule |
+| `list_memory(project_path)` | Memory file names in `<project>/.memory/` |
+| `read_memory(name, project_path)` | Contents of one memory file |
+| `write_memory(name, content, project_path)` | Write a memory file to `<project>/.memory/` |
 | `get_usage_counters` | Per-tool call counts + learn-loop status |
-| `read_project_doc(project_path)` | Contents of `Project.md` for the given project |
-| `write_project_doc(content, project_path)` | Write project memory to `Project.md` |
-
-## Project.md — Project Context
-
-`Project.md` replaces `AGENT.md` as the single project context file. It is injected automatically into every MCP session and scaffolded by `skills-mcp init`. Create it once; edit freely.
-
-**Auto-update**: every `analyze` run writes a `<!-- skills-mcp:begin/end -->` status block into `Project.md` with the last-run timestamp, session count, skill/rule counts, and active signals. User content outside the markers is never touched.
-
-```toml
-[project_doc]
-auto_update = true   # default — set false to manage Project.md entirely by hand
-```
-
-To opt out of auto-update entirely, set `auto_update = false` in `config.toml`.
 
 ---
 
@@ -266,48 +259,37 @@ rules   = "rules"
 
 # Shared content folder — a directory with skills/ and rules/ subdirectories.
 # Both are merged with the project; project always wins on name/id collision.
-# Supports absolute paths or paths relative to this config file.
 # content = ".libraries"
 
-# Legacy: shared skills only (use content = ... to share both skills and rules).
+# Legacy: shared skills only.
 # shared_skills = ".libraries/skills"
 ```
 
 ### Shared content folder
 
-Set `content` to any directory that contains `skills/` and/or `rules/` subdirectories:
-
-```
-.libraries/
-  skills/
-    my-shared-skill.md
-  rules/
-    my-shared-rule.md
-```
+Set `content` to any directory containing `skills/` and/or `rules/` subdirectories:
 
 ```toml
 [paths]
-content = ".libraries"          # relative to config.toml
-# content = "D:/SharedContent" # or absolute
+content = ".libraries"
 ```
 
-- Both `skills/` and `rules/` subdirs are optional — missing ones are silently skipped.
-- Project files always win: a project `rules/foo.md` with `id: foo` shadows `.libraries/rules/foo.md`.
-- `shared_skills` still works for skills-only sharing; `content` is preferred when sharing both.
+- Project files always win on name/id collision.
 - `doctor` warns if `content` is set but the directory or its subdirs are missing.
 
 ## Key Files
 
 | Path | Purpose |
 | --- | --- |
-| `Project.md` | Single project context file — injected into every MCP session and loaded natively by agents that support it; replaces separate `AGENT.md` |
-| `CLAUDE.md` | Auto-loaded by Claude Code; delegates to `Project.md` |
-| `LEARN.md` | Learn pass prompt — paste into any agent to distill sessions |
+| `AGENT.md` | Bootstrap instructions auto-loaded by Cursor, Gemini, and other agents |
+| `CLAUDE.md` | Bootstrap instructions auto-loaded by Claude Code |
+| `LEARN.md` | Learn pass prompt — paste into any agent to distill sessions into skills |
 | `config.toml` | Project paths |
 | `skills/index.md` | Skill catalog; updated by learn pass |
 | `skills/_candidates.md` | Emerging patterns awaiting promotion |
 | `sessions/log.md` | Append-only learn pass history |
-| `rules/dr-*.md` | Auto-generated behavioral guardrails |
+| `<project>/.memory/dr-*.md` | Auto-generated behavioral memory (per project) |
+| `<project>/.memory/*.md` | Agent-written decisions, context, open threads (per project) |
 | `usage_counters.json` | Per-tool MCP call counts (runtime, gitignored) |
 | `logs/` | Per-call markdown blobs (runtime, gitignored) |
 | `state/analyze.lock` | PID lock for running analyze (gitignored) |

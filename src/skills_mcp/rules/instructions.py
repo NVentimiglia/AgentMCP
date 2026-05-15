@@ -7,18 +7,18 @@ from skills_mcp.rules.loader import ActiveRuleIndex
 _BASE = """**skills-mcp** is active. Follow these rituals every session.
 
 ## Session start
-1. Call `read_project_doc(project_path=<absolute path of the project you are working in>)` to load project memory and context.
-2. Call `list_skills` to see available skills; call `read_skill(name)` for any that apply to the current task.
-3. Rules below are already active — no need to re-read them unless directed.
+1. Call `list_memory(project_path=<absolute path of the project you are working in>)` — load any saved learnings, decisions, or context for this project.
+2. Call `list_skills` — check for applicable global skills; call `read_skill(name)` for any that fit.
+3. Rules below are already active.
 
 ## During the session
-- Call `read_skill` before implementing patterns the skill covers.
+- Call `read_skill` before implementing patterns a skill covers.
 - After 2 consecutive tool failures, change strategy — do not retry the same action.
 
 ## Session end
-- If a notable pattern, correction, or new insight emerged, suggest the user save the session to `sessions/YYYY-MM-DD-topic.md`.
-- Call `write_project_doc` to persist any decisions, context, or open threads that should survive into the next session.
-- Check `get_usage_counters` — if `learn_loop.sessions_pending` ≥ 3, remind the user to run the learn pass.
+- If a notable pattern, correction, or decision emerged: call `write_memory(name, content, project_path)` to save it.
+- Suggest the user save the conversation to `sessions/YYYY-MM-DD-topic.md` if it warrants a learn pass.
+- Check `get_usage_counters` — if `learn_loop.sessions_pending` >= 3, remind the user to run the learn pass.
 
 ---
 
