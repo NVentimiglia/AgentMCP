@@ -2,6 +2,11 @@
 skills = "skills"
 rules  = "rules"
 
+# Project.md auto-update: analyze writes a status block into Project.md after each run.
+# Set auto_update = false to manage Project.md entirely by hand.
+[project_doc]
+auto_update = true
+
 # Optional shared content folder containing skills/ and rules/ subdirectories.
 # Project files always win on name/id collision.
 # Supports absolute paths or paths relative to this config file.

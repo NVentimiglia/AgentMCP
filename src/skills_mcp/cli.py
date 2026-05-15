@@ -27,6 +27,10 @@ def cmd_init(target: Path) -> None:
     if not cfg_dst.is_file():
         shutil.copy2(BUNDLED / "config.toml", cfg_dst)
 
+    proj_dst = target / "Project.md"
+    if not proj_dst.is_file():
+        shutil.copy2(BUNDLED / "Project.md", proj_dst)
+
 
 def cmd_serve() -> None:
     from skills_mcp.server import run_stdio_server
@@ -46,7 +50,13 @@ def cmd_analyze() -> int:
     from skills_mcp.paths import project_root_from_env_or_discover
 
     app = init_app(project_root_from_env_or_discover())
-    return run_analyze(app)
+
+    # If the hook fires while the agent is in a different project, CWD won't match
+    # app.root.  Pass CWD as the project_root so Project.md lands in the right place.
+    cwd = Path.cwd().resolve()
+    project_root = cwd if cwd != app.root else None
+
+    return run_analyze(app, project_root=project_root)
 
 
 def cmd_hooks_install(provider: str) -> int:
@@ -56,7 +66,7 @@ def cmd_hooks_install(provider: str) -> int:
     root = project_root_from_env_or_discover()
     ok, msg = install_hook(root, provider=provider)
     if ok:
-        print(f"hooks: {provider} hook installed → {msg}")
+        print(f"hooks: {provider} hook installed -> {msg}")
         print(f"  analyze will now run automatically after each {provider} turn.")
     else:
         print(f"hooks: {msg}")

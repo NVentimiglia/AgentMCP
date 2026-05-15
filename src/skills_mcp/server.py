@@ -55,8 +55,34 @@ def configure(root: Path | None = None) -> AppContext:
     return _APP
 
 
+def _read_project_doc_text(root: Path) -> str | None:
+    """Return ``Project.md`` content if the file exists, else ``None``."""
+    p = root / "Project.md"
+    if p.is_file():
+        try:
+            return p.read_text(encoding="utf-8")
+        except OSError:
+            return None
+    return None
+
+
+def _resolve_project_doc_path(project_path: str, app: AppContext) -> Path:
+    """Resolve the Project.md path from an optional caller-supplied project_path.
+
+    If ``project_path`` is given the agent is working in a different project and
+    we read/write ``Project.md`` there.  Falls back to the MCP server's own root.
+    """
+    if project_path and project_path.strip():
+        return Path(project_path.strip()).resolve() / "Project.md"
+    return app.root / "Project.md"
+
+
 def _sync_mcp_session_instructions(idx: ActiveRuleIndex) -> None:
-    """Push ``rules/*.md`` into MCP server ``instructions`` (host passes to each agent session)."""
+    """Push ``rules/*.md`` into MCP server ``instructions``.
+
+    Project.md is NOT injected here — the server is shared across projects.
+    Agents call ``read_project_doc(project_path=<cwd>)`` at session start instead.
+    """
     mcp._mcp_server.instructions = render_mcp_seed_text(idx)
 
 
@@ -228,6 +254,58 @@ def read_rules(rule_id: str, session_note: str = "") -> str:
         {"rule_id": rule_id, "session_note": session_note},
         session_note,
         lambda: _impl_read_rules(rule_id),
+    )
+
+
+def _impl_read_project_doc(project_path: str) -> str:
+    _, _, _, app = _require_runtime()
+    p = _resolve_project_doc_path(project_path, app)
+    if not p.is_file():
+        return (
+            f"(No Project.md found at {p.parent} — "
+            "call write_project_doc to create project memory.)"
+        )
+    return p.read_text(encoding="utf-8")
+
+
+@mcp.tool()
+def read_project_doc(project_path: str = "", session_note: str = "") -> str:
+    """Return the contents of ``Project.md`` for the given project (project-level memory).
+
+    Pass ``project_path`` as the absolute path to the project you are currently working in
+    (e.g. ``D:/Projects/MyApp``).  Omit to read from the MCP server's own root.
+    """
+    return _run_traced(
+        "read_project_doc",
+        ("_tools", "read_project_doc"),
+        {"project_path": project_path, "session_note": session_note},
+        session_note,
+        lambda: _impl_read_project_doc(project_path),
+    )
+
+
+def _impl_write_project_doc(project_path: str, content: str) -> str:
+    _, _, _, app = _require_runtime()
+    p = _resolve_project_doc_path(project_path, app)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(content, encoding="utf-8")
+    return f"Project.md written ({len(content)} chars) -> {p}"
+
+
+@mcp.tool()
+def write_project_doc(content: str, project_path: str = "", session_note: str = "") -> str:
+    """Write (create or replace) ``Project.md`` for the given project.
+
+    Pass ``project_path`` as the absolute path to the project you are working in.
+    Use this to persist project context, decisions, and notes between sessions.
+    The file is also auto-updated with a status block by ``skills-mcp analyze``.
+    """
+    return _run_traced(
+        "write_project_doc",
+        ("_tools", "write_project_doc"),
+        {"project_path": project_path, "session_note": session_note},
+        session_note,
+        lambda: _impl_write_project_doc(project_path, content),
     )
 
 

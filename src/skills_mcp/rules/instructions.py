@@ -4,7 +4,21 @@ import os
 
 from skills_mcp.rules.loader import ActiveRuleIndex
 
-_BASE = """**skills-mcp** — obey `rules/*.md` below; use `list_skills` → `read_skill` when a skill fits, `list_rules` → `read_rules` when you need one rule file by id (MCP `instructions` already seeds all rules when the host passes them through).
+_BASE = """**skills-mcp** is active. Follow these rituals every session.
+
+## Session start
+1. Call `read_project_doc(project_path=<absolute path of the project you are working in>)` to load project memory and context.
+2. Call `list_skills` to see available skills; call `read_skill(name)` for any that apply to the current task.
+3. Rules below are already active — no need to re-read them unless directed.
+
+## During the session
+- Call `read_skill` before implementing patterns the skill covers.
+- After 2 consecutive tool failures, change strategy — do not retry the same action.
+
+## Session end
+- If a notable pattern, correction, or new insight emerged, suggest the user save the session to `sessions/YYYY-MM-DD-topic.md`.
+- Call `write_project_doc` to persist any decisions, context, or open threads that should survive into the next session.
+- Check `get_usage_counters` — if `learn_loop.sessions_pending` ≥ 3, remind the user to run the learn pass.
 
 ---
 
@@ -32,8 +46,17 @@ def render_active_rules_markdown(idx: ActiveRuleIndex) -> str:
     return "\n---\n\n".join(sections)
 
 
-def render_mcp_seed_text(idx: ActiveRuleIndex, *, truncate_at: int | None = None) -> str:
-    """Full MCP ``instructions`` string: preamble + concatenated rules."""
+def render_mcp_seed_text(
+    idx: ActiveRuleIndex,
+    *,
+    truncate_at: int | None = None,
+) -> str:
+    """Full MCP ``instructions`` string: preamble + concatenated rules.
+
+    Project.md is NOT injected here — the server is shared across projects and
+    instructions are static per startup.  Agents load project context by calling
+    ``read_project_doc(project_path=<cwd>)`` at session start.
+    """
     rules_block = render_active_rules_markdown(idx)
     seed = _BASE + "\n## Rules\n\n" + rules_block
     limit = truncate_at if truncate_at is not None else _max_chars_env()

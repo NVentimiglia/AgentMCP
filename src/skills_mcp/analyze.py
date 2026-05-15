@@ -173,6 +173,73 @@ def _render_rule(
     return "\n".join(fm_lines + body_lines)
 
 
+_PROJECT_DOC_BEGIN = "<!-- skills-mcp:begin -->"
+_PROJECT_DOC_END = "<!-- skills-mcp:end -->"
+
+_PROJECT_DOC_TEMPLATE = """\
+# Project
+
+<!-- Add project-specific context here. This file is injected into every MCP session. -->
+
+"""
+
+
+def _update_project_doc(
+    app: AppContext,
+    *,
+    sessions_analyzed: int,
+    signal_names: list[str],
+    generated_at: str,
+    project_root: Path | None = None,
+) -> None:
+    """Write/update the auto-managed status block inside ``Project.md``.
+
+    ``project_root`` overrides ``app.root`` so the hook can target whichever
+    project the agent is currently working in.  User content outside the
+    ``<!-- skills-mcp:begin/end -->`` markers is preserved.
+    """
+    p = (project_root or app.root) / "Project.md"
+
+    # Read existing content or seed from template.
+    if p.is_file():
+        existing = p.read_text(encoding="utf-8")
+    else:
+        existing = _PROJECT_DOC_TEMPLATE
+
+    # Build the auto-managed block.
+    skills_dir = app.skills_dir
+    rules_dir = app.rules_dir
+    skills_count = len(list(skills_dir.glob("*.md"))) if skills_dir.is_dir() else 0
+    rules_count = len(list(rules_dir.glob("*.md"))) if rules_dir.is_dir() else 0
+
+    signal_list = (
+        "\n".join(f"  - `{s}`" for s in sorted(signal_names))
+        if signal_names
+        else "  _(none detected)_"
+    )
+
+    auto_block = (
+        f"{_PROJECT_DOC_BEGIN}\n"
+        f"## Status _(auto-updated by `skills-mcp analyze`)_\n\n"
+        f"- **Last analyze:** {generated_at}\n"
+        f"- **Sessions analyzed:** {sessions_analyzed}\n"
+        f"- **Skills:** {skills_count}  |  **Rules:** {rules_count}\n"
+        f"- **Active signals:**\n{signal_list}\n"
+        f"{_PROJECT_DOC_END}\n"
+    )
+
+    # Replace existing managed block, or append if absent.
+    begin_idx = existing.find(_PROJECT_DOC_BEGIN)
+    end_idx = existing.find(_PROJECT_DOC_END)
+
+    if begin_idx != -1 and end_idx != -1 and end_idx > begin_idx:
+        new_text = existing[:begin_idx] + auto_block + existing[end_idx + len(_PROJECT_DOC_END):].lstrip("\n")
+    else:
+        new_text = existing.rstrip("\n") + "\n\n" + auto_block
+
+    p.write_text(new_text, encoding="utf-8")
+
+
 def _git_diff_rules(project_root: Path, rules_dir: Path) -> str:
     """Return combined `git diff` + `git status --short` output for rules/."""
     try:
@@ -201,9 +268,11 @@ def _git_diff_rules(project_root: Path, rules_dir: Path) -> str:
     return out or "(no changes)"
 
 
-def run_analyze(app: AppContext) -> int:
+def run_analyze(app: AppContext, *, project_root: Path | None = None) -> int:
     """Run behavioral analysis and write/update rules/dr-*.md.
 
+    ``project_root`` is the project the agent is currently working in.
+    When set, ``Project.md`` is written there instead of ``app.root``.
     Returns 0 on success, 1 on error.
     """
     if not _DR_AVAILABLE:
@@ -220,7 +289,7 @@ def run_analyze(app: AppContext) -> int:
         return 0
 
     try:
-        rc = _run_analyze_inner(app)
+        rc = _run_analyze_inner(app, project_root=project_root)
         if rc == 0:
             lock.stamp()
         return rc
@@ -228,9 +297,10 @@ def run_analyze(app: AppContext) -> int:
         lock.release()
 
 
-def _run_analyze_inner(app: AppContext) -> int:
+def _run_analyze_inner(app: AppContext, *, project_root: Path | None = None) -> int:
     """Analyze body — called only when the lock is held."""
-    project_name = app.root.name
+    effective_root = project_root or app.root
+    project_name = effective_root.name
     print(f"analyze: scanning Claude Code sessions for '{project_name}' ...")
 
     try:
@@ -297,8 +367,19 @@ def _run_analyze_inner(app: AppContext) -> int:
 
     print(f"analyze: wrote {len(written)} rule file(s): {', '.join(written)}")
 
+    # Update Project.md status block if auto_update is enabled (default: true).
+    if app.config.project_doc.auto_update:
+        _update_project_doc(
+            app,
+            sessions_analyzed=report.total_sessions,
+            signal_names=list(sig_counts.keys()),
+            generated_at=generated_at,
+            project_root=project_root,
+        )
+        print("analyze: Project.md status updated")
+
     # Git diff for audit — no prompts, just show what changed
     print("\n--- git diff rules/ ---")
-    print(_git_diff_rules(app.root, rules_dir))
+    print(_git_diff_rules(effective_root, rules_dir))
 
     return 0

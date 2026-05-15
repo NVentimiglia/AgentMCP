@@ -37,10 +37,10 @@ class LoadedSkill:
     catalog_origin: str = "project"
 
 
-def _split_frontmatter(text: str) -> tuple[str, str]:
+def _split_frontmatter(text: str) -> tuple[str, str] | None:
     m = re.match(r"^---\s*\r?\n(.*?)\r?\n---\s*\r?\n(.*)$", text, re.DOTALL)
     if not m:
-        raise ValueError("missing YAML frontmatter (expected --- ... ---)")
+        return None
     return m.group(1), m.group(2)
 
 
@@ -50,11 +50,17 @@ def parse_skill_file(
     project_root: Path,
     skill_disk_root: Path | None = None,
     fmt: str = "legacy_file",
-) -> LoadedSkill:
+) -> LoadedSkill | None:
     path = path.resolve()
     root = project_root.resolve()
     raw = path.read_text(encoding="utf-8")
-    fm_raw, body = _split_frontmatter(raw)
+    split = _split_frontmatter(raw)
+    if split is None:
+        if fmt == "directory":
+            raise ValueError(f"missing YAML frontmatter in {path} (expected --- ... ---)")
+        return None  # Legacy file without frontmatter is not a skill
+
+    fm_raw, body = split
     try:
         data = yaml.safe_load(fm_raw) or {}
         if not isinstance(data, dict):
@@ -127,7 +133,8 @@ def _gather_tree_into_dict(scan_root: Path, project_root: Path) -> dict[str, Loa
             skill_disk_root=p.parent,
             fmt="legacy_file",
         )
-        paths_by_name.setdefault(ls.parsed.fm.name, []).append(ls)
+        if ls is not None:
+            paths_by_name.setdefault(ls.parsed.fm.name, []).append(ls)
 
     dups = {n: [x.rel_path for x in lst] for n, lst in paths_by_name.items() if len(lst) > 1}
     if dups:

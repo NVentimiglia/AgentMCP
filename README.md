@@ -53,7 +53,7 @@ agent turn ends
   → hook fires: skills-mcp analyze
       → lock held or cooldown active? → skip silently
       → scan transcripts: Claude ~/.claude/projects/
-                          Gemini ~/.gemini-docter/transcripts/
+                          Gemini ~/.gemini-docter/transcripts/ (captured locally by hook)
                           Cursor workspaceStorage/**/*.vscdb
       → detect signals (correction-heavy, error-loop, edit-thrashing, …)
       → write/update rules/dr-*.md (version increments each run)
@@ -69,8 +69,10 @@ Cadence: automatic after every agent turn. Protected by PID lock + 60-minute coo
 ```
 skills-mcp serve
   → agent connects via MCP
-  → rules/*.md injected as session instructions
+  → rules/*.md + session rituals injected as instructions
+  → agent calls read_project_doc(project_path) at session start
   → list_skills / read_skill served on demand
+  → write_project_doc persists decisions at session end
   → get_usage_counters reports metrics + learn-loop status
 ```
 
@@ -90,19 +92,25 @@ skills-mcp doctor
 skills-mcp serve
 ```
 
-### End of a useful session
+### Session start (agent does this automatically)
 
-Save the raw conversation to:
+The MCP `instructions` tell the agent to:
 
-```
-sessions/2026-05-14-auth-refactor.md
-```
+1. Call `read_project_doc(project_path=<cwd>)` — load project memory
+2. Call `list_skills` — see what skills apply
+3. Apply active rules (already injected into instructions)
 
-No format required. The learn pass handles extraction.
+### Session end (agent prompts you)
 
-### Weekly: run the learn pass
+At the end of a session with a notable pattern, correction, or decision:
 
-When `sessions_pending` hits 3+:
+1. Save the conversation → `sessions/YYYY-MM-DD-topic.md`
+2. Agent calls `write_project_doc` to persist context for next session
+3. If `sessions_pending` ≥ 3 → run the learn pass
+
+No format required for session files. The learn pass handles extraction.
+
+### Learn pass (manual, when sessions_pending ≥ 3)
 
 1. Open Claude Code → **"run the learn pass"** (or paste `LEARN.md`)
 2. `git diff skills/` — review every change
@@ -115,9 +123,9 @@ get_usage_counters → learn_loop.sessions_pending: 4
                    → learn_loop.last_learn_pass:  2026-05-10T14:23:00Z
 ```
 
-### Audit behavioral rules
+### Behavioral rules (automatic, review periodically)
 
-Rules update in the background after each turn. Review when ready:
+Rules update in the background after each turn. Review when the diff looks interesting:
 
 ```bash
 git diff rules/
@@ -134,7 +142,7 @@ git add rules/ && git commit -m "chore: update behavioral rules"
 | --- | --- | --- |
 | **Claude Code** | `~/.claude/projects/*.jsonl` (written automatically) | `skills-mcp hooks install` → Stop hook in `.claude/settings.local.json` |
 | **Cursor** | `workspaceStorage/**/*.vscdb` (SQLite, read directly) | None — works automatically |
-| **Gemini CLI** | `~/.gemini-docter/transcripts/*.jsonl` (captured by hook) | `skills-mcp hooks install --provider gemini` → `afterEachTurn` in `~/.gemini/settings.json` |
+| **Gemini CLI** | `~/.gemini-docter/transcripts/*.jsonl` (captured locally by hook) | `skills-mcp hooks install --provider gemini` → `afterEachTurn` in `~/.gemini/settings.json` |
 | Antigravity | — | Not yet supported |
 
 All active providers are scanned on every analyze run. Missing or empty sources are silently skipped.
@@ -231,6 +239,23 @@ skills-mcp serve
 | `list_rules` | Rule metadata (id, trigger, file) |
 | `read_rules(id)` | Full Markdown for one rule |
 | `get_usage_counters` | Per-tool call counts + learn-loop status |
+| `read_project_doc(project_path)` | Contents of `Project.md` for the given project |
+| `write_project_doc(content, project_path)` | Write project memory to `Project.md` |
+
+## Project.md — Project Context
+
+`Project.md` replaces `AGENT.md` as the single project context file. It is injected automatically into every MCP session and scaffolded by `skills-mcp init`. Create it once; edit freely.
+
+**Auto-update**: every `analyze` run writes a `<!-- skills-mcp:begin/end -->` status block into `Project.md` with the last-run timestamp, session count, skill/rule counts, and active signals. User content outside the markers is never touched.
+
+```toml
+[project_doc]
+auto_update = true   # default — set false to manage Project.md entirely by hand
+```
+
+To opt out of auto-update entirely, set `auto_update = false` in `config.toml`.
+
+---
 
 ## Configuration (`config.toml`)
 
@@ -275,8 +300,8 @@ content = ".libraries"          # relative to config.toml
 
 | Path | Purpose |
 | --- | --- |
-| `CLAUDE.md` | Auto-loaded by Claude Code at session start |
-| `AGENT.md` | Bootstrap for Gemini, Cursor, and other agents |
+| `Project.md` | Single project context file — injected into every MCP session and loaded natively by agents that support it; replaces separate `AGENT.md` |
+| `CLAUDE.md` | Auto-loaded by Claude Code; delegates to `Project.md` |
 | `LEARN.md` | Learn pass prompt — paste into any agent to distill sessions |
 | `config.toml` | Project paths |
 | `skills/index.md` | Skill catalog; updated by learn pass |

@@ -22,12 +22,14 @@ def test_skill_index_rejects_duplicate_names(tmp_path) -> None:
         ix.scan()
 
 
-def test_skill_missing_frontmatter_rejected(tmp_path) -> None:
+def test_skill_missing_frontmatter_skipped(tmp_path) -> None:
+    # Files without YAML frontmatter (e.g. Project.md, README.md) are silently
+    # ignored so they can coexist in the skills directory without crashing.
     p = tmp_path / "x.md"
     p.write_text("no frontmatter\n", encoding="utf-8")
     ix = SkillIndex(tmp_path, project_root=tmp_path)
-    with pytest.raises(ValueError, match="missing"):
-        ix.scan()
+    ix.scan()
+    assert list(ix.list_skills_meta()) == []
 
 
 def test_read_skill_rejects_paths(project_home) -> None:
