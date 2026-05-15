@@ -16,6 +16,7 @@ class AppContext:
     skills_dir: Path
     shared_skills_dir: Path | None
     rules_dir: Path
+    shared_rules_dir: Path | None
     state_dir: Path
 
 
@@ -24,10 +25,27 @@ _APP: AppContext | None = None
 
 def init_app(root: Path) -> AppContext:
     cfg = load_config(root)
-    from skills_mcp.config_paths import resolve_shared_skills_dir
+    from skills_mcp.config_paths import resolve_content_dir, resolve_shared_skills_dir
 
     resolved_root = root.resolve()
-    ss = resolve_shared_skills_dir(resolved_root, cfg.paths.shared_skills)
+
+    # Resolve content bundle (skills/ + rules/ subdirs).
+    content_dir = resolve_content_dir(resolved_root, cfg.paths.content)
+
+    # shared_skills: explicit config wins; fall back to content/skills/.
+    if cfg.paths.shared_skills:
+        ss = resolve_shared_skills_dir(resolved_root, cfg.paths.shared_skills)
+    elif content_dir is not None:
+        sub = content_dir / "skills"
+        ss = sub if sub.is_dir() else None
+    else:
+        ss = None
+
+    # shared_rules: always derived from content/rules/ (no separate config key yet).
+    shared_rules: Path | None = None
+    if content_dir is not None:
+        sub = content_dir / "rules"
+        shared_rules = sub if sub.is_dir() else None
 
     global _APP
     _APP = AppContext(
@@ -36,6 +54,7 @@ def init_app(root: Path) -> AppContext:
         skills_dir=resolve_path(resolved_root, cfg.paths.skills),
         shared_skills_dir=ss,
         rules_dir=resolve_path(resolved_root, cfg.paths.rules),
+        shared_rules_dir=shared_rules,
         state_dir=(resolved_root / "state").resolve(),
     )
     return _APP

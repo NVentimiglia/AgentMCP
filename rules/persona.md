@@ -32,12 +32,5 @@ solution: >-
 - No hubris: no role epithets, no dramatic labels.
 
 ## Postprocessing
-- Normalize file path casing for Linux deployment compatibility.
-- Update markdown documentation after any coding task.
-
-## Memory.md (`memory.md`)
-- At the start of a session read `memory.md`. If non existant, create it.
-- This file is a working memory of important learnings and lessongs.
-- Write important learnings and lessings into `memory.md`.
-- Write in a minimal bullet point format with groupings by headers.
-- Include notations for corrections, reprompts, repeated prompts, and user anger.
+- Normalize file path casing by making it lowercase.
+- Update comments and markdown after any coding task.

@@ -26,17 +26,31 @@ def parse_rule_md(path: Path) -> ParsedRule:
 
 
 class ActiveRuleIndex:
-    """Loads top-level Markdown files under ``paths.rules`` (default ``rules/*.md``)."""
+    """Loads top-level Markdown files under ``paths.rules`` (default ``rules/*.md``).
 
-    def __init__(self, rules_dir: Path) -> None:
+    An optional ``library_rules_dir`` is loaded first so that project rules
+    always win on ``id`` collision — same semantics as ``SkillIndex``.
+    """
+
+    def __init__(
+        self,
+        rules_dir: Path,
+        library_rules_dir: Path | None = None,
+    ) -> None:
         self.rules_dir = rules_dir.resolve()
+        self.library_rules_dir = library_rules_dir.resolve() if library_rules_dir else None
         self._parsed: dict[str, tuple[Path, ParsedRule]] = {}
 
     def reload(self) -> None:
         self._parsed.clear()
-        if not self.rules_dir.is_dir():
-            return
-        for p in sorted(self.rules_dir.glob("*.md")):
+        # Load shared/library rules first — project rules overwrite on id clash.
+        if self.library_rules_dir and self.library_rules_dir.is_dir():
+            self._load_dir(self.library_rules_dir)
+        if self.rules_dir.is_dir():
+            self._load_dir(self.rules_dir)
+
+    def _load_dir(self, directory: Path) -> None:
+        for p in sorted(directory.glob("*.md")):
             if not p.is_file():
                 continue
             try:

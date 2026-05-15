@@ -1,8 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(ls d:/Projects/SkillsMCP/skills/*.md cat d:/Projects/SkillsMCP/src/skills_mcp/rules/loader.py)",
-      "Bash(grep -n \"created\" d:/Projects/SkillsMCP/src/skills_mcp/rules/*.py)"
+      "WebFetch(domain:github.com)",
+      "Bash(python -m pytest -q)",
+      "Bash(python -m pytest --tb=short -q)",
+      "Bash(python -m pytest tests/test_usage_tracing.py -v)",
+      "Bash(python -m pytest tests/test_analyze.py -v)",
+      "Bash(python -m pytest tests/test_lockfile.py tests/test_hooks.py tests/test_analyze.py -v)",
+      "Bash(python -m pytest tests/test_hooks.py -v)",
+      "Bash(python -m pytest tests/test_content_dir.py -v)",
+      "Bash(git check-ignore:*)"
     ]
   }
 }

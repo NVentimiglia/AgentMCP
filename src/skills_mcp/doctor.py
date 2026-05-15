@@ -4,7 +4,8 @@ import json
 from pathlib import Path
 
 from skills_mcp.config import load_config
-from skills_mcp.config_paths import resolve_shared_skills_dir
+from skills_mcp.config_paths import resolve_content_dir, resolve_shared_skills_dir
+from skills_mcp.hooks import hook_installed
 from skills_mcp.paths import CONFIG_NAME, find_project_root
 
 
@@ -37,6 +38,20 @@ def run_doctor() -> int:
                 "(project skills-only until it exists)",
             )
 
+    if cfg is not None and cfg.paths.content:
+        content = resolve_content_dir(root, cfg.paths.content)
+        if content is None:
+            warn.append(
+                f"paths.content = '{cfg.paths.content}' is set but directory is missing "
+                "(no shared skills or rules until it exists)"
+            )
+        else:
+            for sub in ("skills", "rules"):
+                if not (content / sub).is_dir():
+                    warn.append(
+                        f"paths.content '{content}' exists but has no {sub}/ subdirectory"
+                    )
+
     expected_dirs = [
         root / "skills",
         root / "rules",
@@ -46,6 +61,12 @@ def run_doctor() -> int:
     for d in expected_dirs:
         if not d.exists():
             fatal.append(f"missing directory: {d}")
+
+    if not hook_installed(root):
+        warn.append(
+            "Claude Code Stop hook not installed — run `skills-mcp hooks install` "
+            "to auto-run `analyze` after each turn"
+        )
 
     cursor_cfg = Path.home() / ".cursor" / "mcp.json"
     if cursor_cfg.is_file():

@@ -14,6 +14,9 @@ class PathsConfig(BaseModel):
     rules: str = "rules"
     #: Optional secondary skills repository (merged; project wins on name clash).
     shared_skills: str | None = None
+    #: Optional shared content folder containing skills/ and rules/ subdirectories.
+    #: Provides both shared skills and shared rules; project always wins on collision.
+    content: str | None = None
 
 
 class AgentConfig(BaseModel):

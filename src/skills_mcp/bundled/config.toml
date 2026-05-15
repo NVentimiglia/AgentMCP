@@ -1,5 +1,11 @@
 [paths]
 skills = "skills"
-rules = "rules"
-# Optional: merge a second skill tree — project shadows on naming collisions.
+rules  = "rules"
+
+# Optional shared content folder containing skills/ and rules/ subdirectories.
+# Project files always win on name/id collision.
+# Supports absolute paths or paths relative to this config file.
+# content = ".libraries"
+
+# Legacy: shared skills directory only (use content = ... instead for both skills + rules).
 # shared_skills = ".libraries/skills"

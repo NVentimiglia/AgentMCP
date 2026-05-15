@@ -21,9 +21,16 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
 ]
+# Install vaderSentiment so gemini-docter's sentiment signals work.
+# gemini-docter itself needs no install — just set paths.gemini_docter in config.toml.
+dr = [
+    "vaderSentiment>=3.3.2",
+]
 
 [project.scripts]
+# Canonical name; ``agent-mcp`` is a legacy alias (Cursor configs, env AGENT_MCP_ROOT).
 skills-mcp = "skills_mcp.cli:main"
+agent-mcp = "skills_mcp.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -1,3 +1,5 @@
+.claude/settings.local.json
+scripts/
 .venv/
 __pycache__/
 *.pyc
@@ -7,6 +9,8 @@ dist/
 build/
 memory/
 state/
+usage_counters.json
+logs/
 .skills-mcp/
 *.db
 /skills/scott-plot

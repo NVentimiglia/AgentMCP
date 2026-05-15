@@ -40,6 +40,29 @@ def cmd_doctor() -> int:
     return run_doctor()
 
 
+def cmd_analyze() -> int:
+    from skills_mcp.analyze import run_analyze
+    from skills_mcp.app_state import init_app
+    from skills_mcp.paths import project_root_from_env_or_discover
+
+    app = init_app(project_root_from_env_or_discover())
+    return run_analyze(app)
+
+
+def cmd_hooks_install(provider: str) -> int:
+    from skills_mcp.hooks import install_hook
+    from skills_mcp.paths import project_root_from_env_or_discover
+
+    root = project_root_from_env_or_discover()
+    ok, msg = install_hook(root, provider=provider)
+    if ok:
+        print(f"hooks: {provider} hook installed → {msg}")
+        print(f"  analyze will now run automatically after each {provider} turn.")
+    else:
+        print(f"hooks: {msg}")
+    return 0  # idempotent — never a fatal error
+
+
 def main(argv: list[str] | None = None) -> None:
     argv = argv if argv is not None else sys.argv[1:]
     parser = argparse.ArgumentParser(prog="skills-mcp", description="SkillsMCP MCP server CLI")
@@ -52,6 +75,21 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("serve", help="Run MCP server (stdio)")
 
     sub.add_parser("doctor", help="Verify install and layout")
+
+    sub.add_parser(
+        "analyze",
+        help="Run gemini-docter behavioral analysis and write rules/dr-*.md",
+    )
+
+    p_hooks = sub.add_parser("hooks", help="Manage agent hooks for auto-analyze")
+    p_hooks_sub = p_hooks.add_subparsers(dest="hooks_cmd")
+    p_install = p_hooks_sub.add_parser("install", help="Install auto-analyze hook")
+    p_install.add_argument(
+        "--provider",
+        choices=["claude", "gemini"],
+        default="claude",
+        help="Agent to install hook for (default: claude)",
+    )
 
     args = parser.parse_args(argv)
     logging.basicConfig(
@@ -78,6 +116,15 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.cmd == "doctor":
         sys.exit(cmd_doctor())
+
+    if args.cmd == "analyze":
+        sys.exit(cmd_analyze())
+
+    if args.cmd == "hooks":
+        if args.hooks_cmd == "install":
+            sys.exit(cmd_hooks_install(args.provider))
+        p_hooks.print_help()
+        sys.exit(1)
 
     parser.error(f"unknown command {args.cmd}")
 
