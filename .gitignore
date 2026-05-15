@@ -7,11 +7,20 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-memory/
-state/
-usage_counters.json
-logs/
-.skills-mcp/
 *.db
+
+# Runtime state (logs, counters, locks, stamps)
+state/
+
+# Per-project dynamic memory (kept locally, not committed for other projects)
+.memory/
+
+# Session transcripts (learn-pass input, dot-prefixed)
+.sessions/
+
+# Shared skill libraries (user-configured)
+.skills-mcp/
+
+# Project-specific skill exclusions
 /skills/scott-plot
 /skills/skia

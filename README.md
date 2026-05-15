@@ -2,13 +2,6 @@
 
 One source of truth for agent skills, guardrail rules, and behavioral learning — served to every agent via MCP. Skills compound over time. Anti-patterns self-correct. Git is the audit layer.
 
-## Problem
-I am vibe coding with multiple agents, each wanting to save duplicated
-configurations and skill in various locations. My projects were starting
-to look like the [Cursed Repo](https://github.com/Hacksore/cursed-repo).
-
-To solve this I placed my common rules and skills inside a shared MCP server.
-
 ---
 
 ## How It Works
@@ -29,7 +22,7 @@ MyApp/  (any project using this MCP server)
 
 ```
 agent turns   ──► analyze (auto)    ──► MyApp/.memory/dr-*.md
-sessions/*.md ──► learn pass (manual) ──► skills/*.md  (or .memory/*.md)
+.sessions/*.md ──► learn pass (manual) ──► skills/*.md  (or .memory/*.md)
 ```
 
 ---
@@ -50,7 +43,7 @@ sessions/*.md ──► learn pass (manual) ──► skills/*.md  (or .memory/*
 
 ```
 work with agents
-  → save conversation to sessions/YYYY-MM-DD-topic.md
+  → save conversation to .sessions/YYYY-MM-DD-topic.md
   → 3+ sessions ready?
       → run learn pass: "run the learn pass"
       → git diff skills/
@@ -119,12 +112,13 @@ MCP `instructions` tell the agent to:
 At the end of a session with a notable pattern, correction, or decision:
 
 1. Agent calls `write_memory(name, content, project_path)` — saves to `.memory/`
-2. Save conversation → `sessions/YYYY-MM-DD-topic.md` if worth a learn pass
+2. Save conversation → `.sessions/YYYY-MM-DD-topic.md` if worth a learn pass
 3. If `sessions_pending` ≥ 3 → run the learn pass
 
 ### Learn pass (manual, when sessions_pending ≥ 3)
 
-1. Open Claude Code → **"run the learn pass"** (or paste `LEARN.md`)
+1. `skills-mcp sessions import` — pull JSONL transcripts into `.sessions/`
+2. Open Claude Code → **"run the learn pass"** (or paste `LEARN.md`)
 2. `git diff skills/` — review every change
 3. Commit what's right, revert what isn't
 
@@ -197,7 +191,7 @@ State files live in `state/` (gitignored).
 
 ```json
 {
-  "by_tool": { "list_skills": 12, "read_skill": 34, "list_memory": 8, ... },
+  "by_tool": { "list_skills": 12, "read_skill": 34, "list_memory": 8, "read_memory": 5, "write_memory": 3, ... },
   "total": 54,
   "learn_loop": {
     "skills_count": 18,
@@ -233,6 +227,7 @@ skills-mcp serve
 | `skills-mcp analyze` | Scan transcripts, detect signals, write `<project>/.memory/dr-*.md` |
 | `skills-mcp hooks install` | Install Claude Code Stop hook |
 | `skills-mcp hooks install --provider gemini` | Install Gemini CLI capture + trigger hooks |
+| `skills-mcp sessions import [--project-path PATH]` | Import JSONL transcripts from `~/.claude/projects/` into `.sessions/` |
 
 ## MCP Tools
 
@@ -287,11 +282,11 @@ content = ".libraries"
 | `config.toml` | Project paths |
 | `skills/index.md` | Skill catalog; updated by learn pass |
 | `skills/_candidates.md` | Emerging patterns awaiting promotion |
-| `sessions/log.md` | Append-only learn pass history |
+| `.sessions/log.md` | Append-only learn pass history |
 | `<project>/.memory/dr-*.md` | Auto-generated behavioral memory (per project) |
 | `<project>/.memory/*.md` | Agent-written decisions, context, open threads (per project) |
-| `usage_counters.json` | Per-tool MCP call counts (runtime, gitignored) |
-| `logs/` | Per-call markdown blobs (runtime, gitignored) |
+| `state/usage_counters.json` | Per-tool MCP call counts (runtime, gitignored) |
+| `state/logs/` | Per-call markdown blobs (runtime, gitignored) |
 | `state/analyze.lock` | PID lock for running analyze (gitignored) |
 | `state/analyze.stamp` | Timestamp of last analyze run (gitignored) |
 | `.claude/settings.local.json` | Claude Code hook config (gitignored) |

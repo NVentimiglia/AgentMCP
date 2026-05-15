@@ -45,7 +45,7 @@ def test_all_known_tools_in_counter_schema(project_home: Path) -> None:
 def test_logs_created_under_project(project_home: Path) -> None:
     configure_for_tests(project_home)
     verify_setup()
-    logs = project_home / "logs"
+    logs = project_home / "state" / "logs"
     assert logs.is_dir()
     tool_logs = list(logs.rglob("blob-*.md"))
     assert len(tool_logs) >= 1
@@ -53,8 +53,8 @@ def test_logs_created_under_project(project_home: Path) -> None:
 
 def test_enforce_logs_budget_deletes_oldest(project_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("skills_mcp.usage_logs.MAX_LOG_DIR_BYTES", 800)
-    log_root = project_home / "logs"
-    log_root.mkdir(parents=True)
+    log_root = project_home / "state" / "logs"
+    log_root.mkdir(parents=True, exist_ok=True)
     # Two files; budget forces dropping oldest.
     a = log_root / "a.md"
     b = log_root / "b.md"
@@ -79,7 +79,7 @@ def test_append_tool_log_respects_budget(project_home: Path, monkeypatch: pytest
             response="z" * 400,
             error=None,
         )
-    total = sum(p.stat().st_size for p in (project_home / "logs").rglob("*") if p.is_file())
+    total = sum(p.stat().st_size for p in (project_home / "state" / "logs").rglob("*") if p.is_file())
     assert total <= 1200
 
 
@@ -115,7 +115,7 @@ def test_learn_loop_no_sessions(project_home: Path) -> None:
 
 
 def test_learn_loop_pending_sessions(project_home: Path) -> None:
-    sessions_dir = project_home / "sessions"
+    sessions_dir = project_home / ".sessions"
     sessions_dir.mkdir(exist_ok=True)
     (sessions_dir / "2026-05-01-foo.md").write_text("session A", encoding="utf-8")
     (sessions_dir / "2026-05-02-bar.md").write_text("session B", encoding="utf-8")
@@ -131,7 +131,7 @@ def test_learn_loop_pending_sessions(project_home: Path) -> None:
 def test_learn_loop_after_learn_pass(project_home: Path) -> None:
     import time
 
-    sessions_dir = project_home / "sessions"
+    sessions_dir = project_home / ".sessions"
     sessions_dir.mkdir(exist_ok=True)
     old_session = sessions_dir / "2026-04-01-old.md"
     old_session.write_text("old", encoding="utf-8")

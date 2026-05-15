@@ -17,7 +17,7 @@ _SAFE_SEGMENT = re.compile(r"^[a-z0-9][a-z0-9._-]{0,119}$")
 
 
 def logs_root(project_root: Path) -> Path:
-    return (project_root / "logs").resolve()
+    return (project_root / "state" / "logs").resolve()
 
 
 def sanitize_path_segment(s: str, *, fallback: str = "unknown") -> str:

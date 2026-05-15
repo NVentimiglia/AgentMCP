@@ -10,17 +10,17 @@ sessions into skill updates. Point the agent at this file and say "run the learn
 You are performing a learn pass on the SkillsMCP knowledge base.
 
 ### Inputs
-- `sessions/*.md` — raw conversation logs (source of truth, never modify)
+- `.sessions/*.md` — raw conversation logs (source of truth, never modify)
 - `skills/*.md` — existing skill files (you will update these)
 - `skills/index.md` — catalog of all skills (update summaries here)
 - `skills/_candidates.md` — stubs for emerging patterns (review and update)
-- `sessions/log.md` — append-only learn log (append one entry when done)
+- `.sessions/log.md` — append-only learn log (append one entry when done)
 
 ### Workflow
 
-1. Read `sessions/log.md`. Note the date of the last learn pass.
+1. Read `.sessions/log.md`. Note the date of the last learn pass.
 2. Read `skills/index.md` and `skills/_candidates.md` to understand current coverage.
-3. List all files in `sessions/` modified after that date.
+3. List all files in `.sessions/` modified after that date.
    If no log entry exists, process all session files.
 4. For each new session file:
    a. Read it fully.
@@ -41,7 +41,7 @@ You are performing a learn pass on the SkillsMCP knowledge base.
    - Required frontmatter: `name`, `description`.
    - Write a `## Summary`, `## When to use`, `## Steps or patterns`, `## Examples` (if any).
 7. Update `skills/index.md` with any new skills or updated descriptions.
-8. After processing all sessions, append one entry to `sessions/log.md`:
+8. After processing all sessions, append one entry to `.sessions/log.md`:
 
 ```
 ## [TODAY] learn | <one-line summary of what changed>

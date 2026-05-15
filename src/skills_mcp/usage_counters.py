@@ -18,6 +18,9 @@ KNOWN_TOOLS: tuple[str, ...] = (
     "read_skill",
     "list_rules",
     "read_rules",
+    "list_memory",
+    "read_memory",
+    "write_memory",
     "get_usage_counters",
 )
 
@@ -27,7 +30,7 @@ def _default_by_tool() -> dict[str, int]:
 
 
 def counters_path(project_root: Path) -> Path:
-    return (project_root / COUNTERS_FILENAME).resolve()
+    return (project_root / "state" / COUNTERS_FILENAME).resolve()
 
 
 def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:

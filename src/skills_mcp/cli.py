@@ -56,6 +56,23 @@ def cmd_analyze() -> int:
     return run_analyze(app, project_root=project_root)
 
 
+def cmd_sessions_import(project_path: str | None) -> int:
+    from skills_mcp.app_state import init_app
+    from skills_mcp.paths import project_root_from_env_or_discover
+    from skills_mcp.sessions import import_sessions
+
+    app = init_app(project_root_from_env_or_discover())
+    project_root = Path(project_path).resolve() if project_path else (Path.cwd().resolve())
+    sessions_dir = app.root / ".sessions"
+
+    print(f"sessions: importing from '{project_root.name}' -> {sessions_dir}")
+    imported, skipped = import_sessions(project_root, sessions_dir)
+    print(f"sessions: {imported} imported, {skipped} skipped (already imported or empty)")
+    if imported:
+        print(f"  -> run the learn pass to distill into skills")
+    return 0
+
+
 def cmd_hooks_install(provider: str) -> int:
     from skills_mcp.hooks import install_hook
     from skills_mcp.paths import project_root_from_env_or_discover
@@ -85,7 +102,18 @@ def main(argv: list[str] | None = None) -> None:
 
     sub.add_parser(
         "analyze",
-        help="Run gemini-docter behavioral analysis and write rules/dr-*.md",
+        help="Run behavioral analysis and write <project>/.memory/dr-*.md",
+    )
+
+    p_sessions = sub.add_parser("sessions", help="Manage session files for the learn pass")
+    p_sessions_sub = p_sessions.add_subparsers(dest="sessions_cmd")
+    p_sess_import = p_sessions_sub.add_parser(
+        "import", help="Import JSONL transcripts from ~/.claude/projects/ into sessions/"
+    )
+    p_sess_import.add_argument(
+        "--project-path",
+        default=None,
+        help="Project to import from (default: CWD)",
     )
 
     p_hooks = sub.add_parser("hooks", help="Manage agent hooks for auto-analyze")
@@ -126,6 +154,12 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.cmd == "analyze":
         sys.exit(cmd_analyze())
+
+    if args.cmd == "sessions":
+        if args.sessions_cmd == "import":
+            sys.exit(cmd_sessions_import(args.project_path))
+        p_sessions.print_help()
+        sys.exit(1)
 
     if args.cmd == "hooks":
         if args.hooks_cmd == "install":

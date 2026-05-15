@@ -333,7 +333,7 @@ _SESSION_SKIP = frozenset({"log.md", "readme.md", ".gitkeep"})
 
 def _learn_loop_snapshot(app: AppContext, skills: SkillIndex) -> dict[str, object]:
     """Collect learning-loop file metrics: session counts, pending sessions, last learn pass."""
-    sessions_dir = app.root / "sessions"
+    sessions_dir = app.root / ".sessions"
     log_md = sessions_dir / "log.md"
 
     session_files: list[Path] = []
