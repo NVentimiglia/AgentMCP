@@ -6,6 +6,8 @@ Works with Claude Code, Gemini CLI, Cursor, and Antigravity.
 
 Prevents your project from looking like the [Cursed Repo](https://github.com/Hacksore/cursed-repo).
 
+For a self learning MCP, see [MemoryMCP](https://github.com/NVentimiglia/MemoryMCP).
+
 ---
 
 ## What it does
