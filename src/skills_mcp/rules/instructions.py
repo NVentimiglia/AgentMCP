@@ -2,63 +2,36 @@ from __future__ import annotations
 
 import os
 
-from skills_mcp.rules.loader import ActiveRuleIndex
-
 _BASE = """**skills-mcp** is active. Follow these rituals every session.
 
 ## Session start
-1. Call `list_memory(project_path=<absolute path of the project you are working in>)` — load any saved learnings, decisions, or context for this project.
-2. Call `list_skills` — check for applicable global skills; call `read_skill(name)` for any that fit.
-3. Rules below are already active.
+1. Call `list_skills` — check for applicable global and project-local skills.
+2. Call `read_skill(name)` for any skill that applies to the current task.
+3. AGENT.md rules below are already active.
 
 ## During the session
 - Call `read_skill` before implementing patterns a skill covers.
 - After 2 consecutive tool failures, change strategy — do not retry the same action.
-
-## Session end
-- If a notable pattern, correction, or decision emerged: call `write_memory(name, content, project_path)` to save it.
-- Suggest the user save the conversation to `sessions/YYYY-MM-DD-topic.md` if it warrants a learn pass.
-- Check `get_usage_counters` — if `learn_loop.sessions_pending` >= 3, remind the user to run the learn pass.
 
 ---
 
 """
 
 
-def render_active_rules_markdown(idx: ActiveRuleIndex) -> str:
-    """Concatenate ``rules/*.md`` bodies with metadata headers for MCP session seeding."""
-    sections: list[str] = []
-    for _, pr in idx.iter_sorted():
-        fm = pr.fm
-        body = pr.body.strip()
-        block = (
-            f"### Rule `{fm.id}`\n\n"
-            f"- **trigger:** {fm.trigger}\n"
-            f"- **solution:** {fm.solution}\n\n"
-            f"{body}\n"
-        )
-        sections.append(block)
-    if not sections:
-        return (
-            "(No valid `rules/*.md` rule files yet — each file needs YAML frontmatter with "
-            "``id``, ``trigger``, ``solution``.)\n"
-        )
-    return "\n---\n\n".join(sections)
-
-
 def render_mcp_seed_text(
-    idx: ActiveRuleIndex,
     *,
+    agent_md_content: str | None = None,
     truncate_at: int | None = None,
 ) -> str:
-    """Full MCP ``instructions`` string: preamble + concatenated rules.
+    """Full MCP ``instructions`` string: preamble + AGENT.md content.
 
-    Project.md is NOT injected here — the server is shared across projects and
-    instructions are static per startup.  Agents load project context by calling
-    ``read_project_doc(project_path=<cwd>)`` at session start.
+    If ``agent_md_content`` is provided (from ``.agents/AGENT.md``), it is appended
+    after the preamble.  Otherwise only the preamble is returned.
     """
-    rules_block = render_active_rules_markdown(idx)
-    seed = _BASE + "\n## Rules\n\n" + rules_block
+    if agent_md_content is not None:
+        seed = _BASE + "\n## Rules\n\n" + agent_md_content
+    else:
+        seed = _BASE
     limit = truncate_at if truncate_at is not None else _max_chars_env()
     if limit is None or limit <= 0:
         return seed

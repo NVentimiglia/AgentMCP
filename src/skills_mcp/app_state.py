@@ -15,9 +15,9 @@ class AppContext:
     config: AgentConfig
     skills_dir: Path
     shared_skills_dir: Path | None
-    rules_dir: Path
-    shared_rules_dir: Path | None
     state_dir: Path
+    #: Path to .agents/AGENT.md if present — single-file behavioral rules source.
+    agent_md: Path | None = None
 
 
 _APP: AppContext | None = None
@@ -29,7 +29,7 @@ def init_app(root: Path) -> AppContext:
 
     resolved_root = root.resolve()
 
-    # Resolve content bundle (skills/ + rules/ subdirs).
+    # Resolve content bundle (skills/ subdirectory).
     content_dir = resolve_content_dir(resolved_root, cfg.paths.content)
 
     # shared_skills: explicit config wins; fall back to content/skills/.
@@ -41,11 +41,8 @@ def init_app(root: Path) -> AppContext:
     else:
         ss = None
 
-    # shared_rules: always derived from content/rules/ (no separate config key yet).
-    shared_rules: Path | None = None
-    if content_dir is not None:
-        sub = content_dir / "rules"
-        shared_rules = sub if sub.is_dir() else None
+    # Detect .agents/AGENT.md — single-file behavioral rules source.
+    agent_md_path = resolved_root / ".agents" / "AGENT.md"
 
     global _APP
     _APP = AppContext(
@@ -53,9 +50,8 @@ def init_app(root: Path) -> AppContext:
         config=cfg,
         skills_dir=resolve_path(resolved_root, cfg.paths.skills),
         shared_skills_dir=ss,
-        rules_dir=resolve_path(resolved_root, cfg.paths.rules),
-        shared_rules_dir=shared_rules,
         state_dir=(resolved_root / "state").resolve(),
+        agent_md=agent_md_path if agent_md_path.is_file() else None,
     )
     return _APP
 

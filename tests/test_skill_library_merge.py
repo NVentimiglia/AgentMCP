@@ -15,7 +15,7 @@ def test_skill_index_merges_shared_skills_under_unique_names(project_home: Path)
     )
 
     ix = SkillIndex(
-        project_home / "skills",
+        project_home / ".agents" / "skills",
         project_root=project_home,
         library_skill_dirs=(central,),
     )
@@ -35,7 +35,7 @@ def test_project_skill_shadows_shared_catalog_on_name(project_home: Path) -> Non
         encoding="utf-8",
     )
 
-    proj = project_home / "skills" / "twin-skill"
+    proj = project_home / ".agents" / "skills" / "twin-skill"
     proj.mkdir(parents=True, exist_ok=True)
     (proj / "SKILL.md").write_text(
         "---\nname: twin-skill\ndescription: Project\n---\nFROM-PROJECT\n",
@@ -43,7 +43,7 @@ def test_project_skill_shadows_shared_catalog_on_name(project_home: Path) -> Non
     )
 
     ix = SkillIndex(
-        project_home / "skills",
+        project_home / ".agents" / "skills",
         project_root=project_home,
         library_skill_dirs=(central,),
     )

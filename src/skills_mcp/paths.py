@@ -7,7 +7,11 @@ CONFIG_NAME = "config.toml"
 
 
 def _looks_like_agent_project(root: Path) -> bool:
-    """Return True if the directory has at least one expected skills-mcp subdirectory."""
+    """Return True if the directory looks like a skills-mcp project."""
+    # New convention: .agents/ folder
+    if (root / ".agents").is_dir():
+        return True
+    # Legacy: skills/ + rules/ at root level
     return (root / "skills").is_dir() and (root / "rules").is_dir()
 
 

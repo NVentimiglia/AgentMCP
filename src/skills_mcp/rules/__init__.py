@@ -1,1 +1,1 @@
-"""Rule documents and loaders."""
+"""Rules instructions renderer."""

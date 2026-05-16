@@ -5,7 +5,7 @@ from pathlib import Path
 
 from skills_mcp.config import load_config
 from skills_mcp.config_paths import resolve_content_dir, resolve_shared_skills_dir
-from skills_mcp.hooks import hook_installed
+from skills_mcp.mcp_registration import registration_status
 from skills_mcp.paths import CONFIG_NAME, find_project_root
 
 
@@ -46,46 +46,43 @@ def run_doctor() -> int:
                 "(no shared skills or rules until it exists)"
             )
         else:
-            for sub in ("skills", "rules"):
-                if not (content / sub).is_dir():
-                    warn.append(
-                        f"paths.content '{content}' exists but has no {sub}/ subdirectory"
-                    )
+            if not (content / "skills").is_dir():
+                warn.append(
+                    f"paths.content '{content}' exists but has no skills/ subdirectory"
+                )
 
-    expected_dirs = [
-        root / "skills",
-        root / "rules",
-        root / "state",
-        root / "tests",
-    ]
-    for d in expected_dirs:
-        if not d.exists():
-            fatal.append(f"missing directory: {d}")
+    agents_dir = root / ".agents"
+    if not agents_dir.is_dir():
+        warn.append("missing .agents/ directory — run `skills-mcp init` to scaffold")
+    else:
+        if not (agents_dir / "skills").is_dir():
+            warn.append("missing .agents/skills/ directory")
+        if not (agents_dir / "AGENT.md").is_file():
+            warn.append(
+                "missing .agents/AGENT.md — add this file to define always-on behavioral rules"
+            )
 
-    if not hook_installed(root):
-        warn.append(
-            "Claude Code Stop hook not installed — run `skills-mcp hooks install` "
-            "to auto-run `analyze` after each turn"
-        )
+    # MCP server registration — must be registered for hosts to auto-start serve
+    reg = registration_status()
+    for host, registered in reg.items():
+        if not registered:
+            warn.append(
+                f"{host}: skills-mcp server not registered — run `skills-mcp mcp register` "
+                f"(serve will not start automatically without this)"
+            )
 
+    # Cursor: check for deprecated key
     cursor_cfg = Path.home() / ".cursor" / "mcp.json"
     if cursor_cfg.is_file():
         try:
             raw = json.loads(cursor_cfg.read_text(encoding="utf-8"))
             servers = (raw.get("mcpServers") or {}) if isinstance(raw, dict) else {}
-            if "skills-mcp" not in servers:
-                if "agent-mcp" in servers:
-                    warn.append(
-                        "Cursor MCP still uses deprecated `agent-mcp` key; rename to `skills-mcp` in mcp.json"
-                    )
-                else:
-                    warn.append(
-                        "Cursor MCP config exists but missing `skills-mcp` server entry"
-                    )
+            if "agent-mcp" in servers and "skills-mcp" not in servers:
+                warn.append(
+                    "Cursor MCP still uses deprecated `agent-mcp` key — rename to `skills-mcp` in ~/.cursor/mcp.json"
+                )
         except Exception as e:
-            warn.append(f"unable to parse Cursor MCP config ~/.cursor/mcp.json: {e}")
-    else:
-        warn.append("Cursor MCP config not found at ~/.cursor/mcp.json (optional)")
+            warn.append(f"unable to parse ~/.cursor/mcp.json: {e}")
 
     _print(fatal, warn)
     return 1 if fatal else 0

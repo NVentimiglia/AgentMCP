@@ -10,18 +10,11 @@ from mcp.server.fastmcp import FastMCP
 from skills_mcp.app_state import AppContext, init_app, reset_app
 from skills_mcp.paths import project_root_from_env_or_discover
 from skills_mcp.rules.instructions import render_mcp_seed_text
-from skills_mcp.rules.loader import ActiveRuleIndex
-from skills_mcp.rules.service import RulesService
-from skills_mcp.session_logging import init_project_error_logging
 from skills_mcp.skills.loader import SkillIndex
-from skills_mcp.usage_counters import counters_snapshot_json, increment_tool_counter
-from skills_mcp.usage_logs import append_tool_log, format_exception, sanitize_path_segment
 
 mcp = FastMCP("skills-mcp")
 
 _SKILLS: SkillIndex | None = None
-_RULE_INDEX: ActiveRuleIndex | None = None
-_RULES: RulesService | None = None
 _APP: AppContext | None = None
 
 
@@ -31,11 +24,10 @@ def configure_for_tests(root: Path) -> AppContext:
 
 
 def configure(root: Path | None = None) -> AppContext:
-    global _SKILLS, _RULE_INDEX, _RULES, _APP
+    global _SKILLS, _APP
     if root is None:
         root = project_root_from_env_or_discover()
     _APP = init_app(root)
-    init_project_error_logging(_APP.state_dir / "logs")
 
     lib_roots: tuple[Path, ...] = ()
     if _APP.shared_skills_dir:
@@ -47,101 +39,55 @@ def configure(root: Path | None = None) -> AppContext:
     )
     _SKILLS.scan()
 
-    _RULE_INDEX = ActiveRuleIndex(_APP.rules_dir, library_rules_dir=_APP.shared_rules_dir)
-    _RULE_INDEX.reload()
-    _sync_mcp_session_instructions(_RULE_INDEX)
+    agent_md_content = _APP.agent_md.read_text(encoding="utf-8") if _APP.agent_md else None
+    _sync_mcp_session_instructions(agent_md_content=agent_md_content)
 
-    _RULES = RulesService(_APP, active_index=_RULE_INDEX)
     return _APP
 
 
-def _resolve_memory_dir(project_path: str, app: AppContext) -> Path:
-    """Return the ``.memory/`` directory for the given project.
-
-    ``project_path`` should be the absolute path of the project the agent is
-    working in.  Falls back to ``app.root`` when omitted.
-    """
-    from skills_mcp.analyze import memory_dir
-    root = Path(project_path.strip()).resolve() if project_path and project_path.strip() else app.root
-    return memory_dir(root)
-
-
-def _sync_mcp_session_instructions(idx: ActiveRuleIndex) -> None:
-    """Push ``rules/*.md`` into MCP server ``instructions``.
-
-    Project.md is NOT injected here — the server is shared across projects.
-    Agents call ``read_project_doc(project_path=<cwd>)`` at session start instead.
-    """
-    mcp._mcp_server.instructions = render_mcp_seed_text(idx)
+def _sync_mcp_session_instructions(*, agent_md_content: str | None = None) -> None:
+    """Push AGENT.md content into MCP server ``instructions``."""
+    mcp._mcp_server.instructions = render_mcp_seed_text(agent_md_content=agent_md_content)
 
 
 def reset_runtime() -> None:
-    global _SKILLS, _RULE_INDEX, _RULES, _APP
+    global _SKILLS, _APP
     _SKILLS = None
-    _RULE_INDEX = None
-    _RULES = None
     _APP = None
     reset_app()
 
 
-def _require_runtime() -> tuple[SkillIndex, ActiveRuleIndex, RulesService, AppContext]:
-    if _SKILLS is None or _RULE_INDEX is None or _RULES is None or _APP is None:
+def _require_runtime() -> tuple[SkillIndex, AppContext]:
+    if _SKILLS is None or _APP is None:
         configure()
     assert _SKILLS is not None
-    assert _RULE_INDEX is not None
-    assert _RULES is not None
     assert _APP is not None
-    return _SKILLS, _RULE_INDEX, _RULES, _APP
+    return _SKILLS, _APP
 
 
 def _run_traced(
     tool_name: str,
-    log_bucket: tuple[str, ...],
-    args_for_log: dict[str, object],
-    session_note: str,
     fn: Callable[[], str],
 ) -> str:
-    """Increment counters (before run), execute, append trace log in ``finally``."""
-    *_rest, app = _require_runtime()
-    increment_tool_counter(app.root, tool_name)
-    response: str | None = None
-    err_tb: str | None = None
-    try:
-        response = fn()
-        return response
-    except BaseException as exc:
-        err_tb = format_exception(exc)
-        raise
-    finally:
-        append_tool_log(
-            app.root,
-            bucket_parts=log_bucket,
-            tool_name=tool_name,
-            args=args_for_log,
-            session_note=session_note,
-            response=response,
-            error=err_tb,
-        )
+    """Execute tool function."""
+    _skills, app = _require_runtime()
+    return fn()
 
 
 def _impl_verify_setup() -> str:
-    skills, idx, _, app = _require_runtime()
+    skills, app = _require_runtime()
 
     issues: list[str] = []
 
     sd = app.skills_dir
-    rd = app.rules_dir
     st = app.state_dir
 
     if not sd.is_dir():
         issues.append("skills_dir_missing")
-    if not rd.is_dir():
-        issues.append("rules_dir_missing")
     if not st.is_dir():
         issues.append("state_dir_missing")
 
     meta = skills.list_skills_meta()
-    rules_tt = idx.list_ids_triggers()
 
     report = {
         "ok": len(issues) == 0,
@@ -152,244 +98,81 @@ def _impl_verify_setup() -> str:
             "shared_skills_dir": str(app.shared_skills_dir.resolve())
             if app.shared_skills_dir
             else None,
-            "rules_dir": str(rd.resolve()),
             "state_dir": str(st.resolve()),
         },
         "issues": issues,
         "skills_count": len(meta),
-        "rules_count": len(rules_tt),
     }
     return json.dumps(report, indent=2, ensure_ascii=False, sort_keys=False)
 
 
 @mcp.tool()
 def verify_setup(session_note: str = "") -> str:
-    """One-call health snapshot: paths and skill/rule counts."""
-    return _run_traced(
-        "verify_setup",
-        ("_tools", "verify_setup"),
-        {"session_note": session_note},
-        session_note,
-        _impl_verify_setup,
-    )
+    """One-call health snapshot: paths and skill counts."""
+    return _run_traced("verify_setup", _impl_verify_setup)
 
 
-def _impl_list_skills() -> str:
-    skills, _, _, _app = _require_runtime()
-    meta = list(skills.list_skills_meta())
-    return json.dumps(meta, ensure_ascii=False)
+def _local_skill_index(project_path: str, app: AppContext) -> "SkillIndex | None":
+    """Build a SkillIndex for a local project's .agents/skills/ if it exists and differs from global."""
+    if not project_path or not project_path.strip():
+        return None
+    local_root = Path(project_path.strip()).resolve()
+    if local_root == app.root:
+        return None
+    local_skills_dir = local_root / ".agents" / "skills"
+    if not local_skills_dir.is_dir():
+        return None
+    idx = SkillIndex(local_skills_dir, project_root=local_root)
+    idx.scan()
+    return idx
+
+
+def _impl_list_skills(project_path: str) -> str:
+    skills, app = _require_runtime()
+    global_meta = list(skills.list_skills_meta())
+    local_idx = _local_skill_index(project_path, app)
+    if local_idx is None:
+        return json.dumps(global_meta, ensure_ascii=False)
+    local_meta = list(local_idx.list_skills_meta())
+    local_names = {m["name"] for m in local_meta}
+    # Local wins on name collision; global fills in the rest
+    merged = local_meta + [m for m in global_meta if m["name"] not in local_names]
+    return json.dumps(merged, ensure_ascii=False)
 
 
 @mcp.tool()
-def list_skills(session_note: str = "") -> str:
-    """Return JSON list of skill metadata (name, description, path, …)."""
-    return _run_traced(
-        "list_skills",
-        ("_tools", "list_skills"),
-        {"session_note": session_note},
-        session_note,
-        _impl_list_skills,
-    )
+def list_skills(project_path: str = "", session_note: str = "") -> str:
+    """Return JSON list of skill metadata — global skills merged with local project skills.
+
+    Pass ``project_path`` (absolute path of the project you are working in) to
+    include skills from that project's ``.agents/skills/`` folder.  Local skills
+    take precedence over global on name collision.
+    """
+    return _run_traced("list_skills", lambda: _impl_list_skills(project_path))
 
 
-def _impl_read_skill(name: str, usage_reason: str) -> str:
-    skills, _, _, _app = _require_runtime()
+def _impl_read_skill(name: str, project_path: str, usage_reason: str) -> str:
+    skills, app = _require_runtime()
+    # Check local project first
+    local_idx = _local_skill_index(project_path, app)
+    if local_idx is not None:
+        try:
+            sk = local_idx.get_by_name(name)
+            return sk.parsed.full_markdown()
+        except (KeyError, ValueError):
+            pass
     sk = skills.get_by_name(name)
     return sk.parsed.full_markdown()
 
 
 @mcp.tool()
-def read_skill(name: str, usage_reason: str = "", session_note: str = "") -> str:
-    """Return the full Markdown for a skill by name (including frontmatter)."""
-    bucket = (sanitize_path_segment(name, fallback="invalid_skill"),)
-    return _run_traced(
-        "read_skill",
-        bucket,
-        {"name": name, "usage_reason": usage_reason, "session_note": session_note},
-        session_note,
-        lambda: _impl_read_skill(name, usage_reason),
-    )
+def read_skill(name: str, project_path: str = "", usage_reason: str = "", session_note: str = "") -> str:
+    """Return the full Markdown for a skill by name.
 
-
-def _impl_list_rules() -> str:
-    _, idx, _, _app = _require_runtime()
-    return json.dumps(idx.list_catalog(), ensure_ascii=False)
-
-
-@mcp.tool()
-def list_rules(session_note: str = "") -> str:
-    """Return JSON list of rule metadata (id, trigger, file) under ``paths.rules``."""
-    return _run_traced(
-        "list_rules",
-        ("_tools", "list_rules"),
-        {"session_note": session_note},
-        session_note,
-        _impl_list_rules,
-    )
-
-
-def _impl_read_rules(rule_id: str) -> str:
-    _, idx, _, _app = _require_runtime()
-    return idx.read_full_markdown(rule_id)
-
-
-@mcp.tool()
-def read_rules(rule_id: str, session_note: str = "") -> str:
-    """Return the full Markdown for one rule by YAML ``id`` (including frontmatter)."""
-    bucket = ("_rules", sanitize_path_segment(rule_id, fallback="unknown_rule"))
-    return _run_traced(
-        "read_rules",
-        bucket,
-        {"rule_id": rule_id, "session_note": session_note},
-        session_note,
-        lambda: _impl_read_rules(rule_id),
-    )
-
-
-def _impl_list_memory(project_path: str) -> str:
-    _, _, _, app = _require_runtime()
-    mem = _resolve_memory_dir(project_path, app)
-    if not mem.is_dir():
-        return "[]"
-    files = sorted(p.name for p in mem.glob("*.md"))
-    return json.dumps(files, ensure_ascii=False)
-
-
-@mcp.tool()
-def list_memory(project_path: str = "", session_note: str = "") -> str:
-    """List memory file names in ``<project>/.memory/``.
-
-    Pass ``project_path`` as the absolute path of the project you are working in.
-    Memory files are project-local learnings: behavioral signals (``dr-*.md``),
-    decisions, open threads, and any context worth keeping between sessions.
+    Checks the local project's ``.agents/skills/`` first (if ``project_path`` given),
+    then falls back to global skills.
     """
-    return _run_traced(
-        "list_memory",
-        ("_tools", "list_memory"),
-        {"project_path": project_path, "session_note": session_note},
-        session_note,
-        lambda: _impl_list_memory(project_path),
-    )
-
-
-def _impl_read_memory(project_path: str, name: str) -> str:
-    _, _, _, app = _require_runtime()
-    mem = _resolve_memory_dir(project_path, app)
-    if not name.endswith(".md"):
-        name = name + ".md"
-    p = mem / name
-    if not p.is_file():
-        return f"(No memory file '{name}' found — call list_memory to see available files.)"
-    return p.read_text(encoding="utf-8")
-
-
-@mcp.tool()
-def read_memory(name: str, project_path: str = "", session_note: str = "") -> str:
-    """Read one memory file from ``<project>/.memory/<name>.md``.
-
-    Use ``list_memory`` first to see what files exist.
-    Pass ``project_path`` as the absolute path of the project you are working in.
-    """
-    return _run_traced(
-        "read_memory",
-        ("_tools", "read_memory"),
-        {"name": name, "project_path": project_path, "session_note": session_note},
-        session_note,
-        lambda: _impl_read_memory(project_path, name),
-    )
-
-
-def _impl_write_memory(project_path: str, name: str, content: str) -> str:
-    _, _, _, app = _require_runtime()
-    mem = _resolve_memory_dir(project_path, app)
-    mem.mkdir(parents=True, exist_ok=True)
-    if not name.endswith(".md"):
-        name = name + ".md"
-    p = mem / name
-    p.write_text(content, encoding="utf-8")
-    return f"memory written ({len(content)} chars) -> {p}"
-
-
-@mcp.tool()
-def write_memory(name: str, content: str, project_path: str = "", session_note: str = "") -> str:
-    """Write a memory file to ``<project>/.memory/<name>.md``.
-
-    Use this to save decisions, open threads, context, or any learning that
-    should persist into the next session.  ``name`` is the filename without
-    extension (e.g. ``decisions``, ``context``, ``open-threads``).
-    Pass ``project_path`` as the absolute path of the project you are working in.
-    """
-    return _run_traced(
-        "write_memory",
-        ("_tools", "write_memory"),
-        {"name": name, "project_path": project_path, "session_note": session_note},
-        session_note,
-        lambda: _impl_write_memory(project_path, name, content),
-    )
-
-
-_SESSION_SKIP = frozenset({"log.md", "readme.md", ".gitkeep"})
-
-
-def _learn_loop_snapshot(app: AppContext, skills: SkillIndex) -> dict[str, object]:
-    """Collect learning-loop file metrics: session counts, pending sessions, last learn pass."""
-    sessions_dir = app.root / ".sessions"
-    log_md = sessions_dir / "log.md"
-
-    session_files: list[Path] = []
-    if sessions_dir.is_dir():
-        session_files = [
-            p for p in sessions_dir.glob("*.md")
-            if p.name.lower() not in _SESSION_SKIP
-        ]
-
-    last_learn_pass: str | None = None
-    log_mtime: float | None = None
-    if log_md.is_file():
-        try:
-            log_mtime = log_md.stat().st_mtime
-            last_learn_pass = datetime.fromtimestamp(log_mtime, tz=UTC).strftime(
-                "%Y-%m-%dT%H:%M:%SZ"
-            )
-        except OSError:
-            pass
-
-    pending = 0
-    for sf in session_files:
-        try:
-            mt = sf.stat().st_mtime
-        except OSError:
-            continue
-        if log_mtime is None or mt > log_mtime:
-            pending += 1
-
-    return {
-        "skills_count": len(list(skills.list_skills_meta())),
-        "sessions_total": len(session_files),
-        "sessions_pending": pending,
-        "last_learn_pass": last_learn_pass,
-    }
-
-
-def _impl_get_usage_counters() -> str:
-    skills, _idx, _rules, app = _require_runtime()
-    data: dict[str, object] = json.loads(
-        counters_snapshot_json(app.root, project_root_str=str(app.root.resolve()))
-    )
-    data["learn_loop"] = _learn_loop_snapshot(app, skills)
-    return json.dumps(data, indent=2, ensure_ascii=False, sort_keys=False)
-
-
-@mcp.tool()
-def get_usage_counters(session_note: str = "") -> str:
-    """Return JSON usage counters (per-tool totals and ``usage_counters.json`` snapshot)."""
-    return _run_traced(
-        "get_usage_counters",
-        ("_tools", "get_usage_counters"),
-        {"session_note": session_note},
-        session_note,
-        _impl_get_usage_counters,
-    )
+    return _run_traced("read_skill", lambda: _impl_read_skill(name, project_path, usage_reason))
 
 
 def run_stdio_server() -> None:

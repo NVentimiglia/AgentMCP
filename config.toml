@@ -1,3 +1,2 @@
 [paths]
-skills = "skills"
-rules = "rules"
+skills = ".agents/skills"

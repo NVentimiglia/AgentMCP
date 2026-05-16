@@ -45,7 +45,7 @@ def test_read_skill_path_injection(project_home) -> None:
 
 
 def test_read_skill_roundtrip(project_home) -> None:
-    (project_home / "skills" / "ping.md").write_text(
+    (project_home / ".agents" / "skills" / "ping.md").write_text(
         "---\nname: ping\ndescription: Smoke read_skill\n---\nUse list_skills first.\n",
         encoding="utf-8",
     )
@@ -56,7 +56,7 @@ def test_read_skill_roundtrip(project_home) -> None:
 
 
 def test_directory_skill_spec_and_resources(project_home) -> None:
-    d = project_home / "skills" / "pdf-processing"
+    d = project_home / ".agents" / "skills" / "pdf-processing"
     d.mkdir(parents=True, exist_ok=True)
     (d / "SKILL.md").write_text(
         (
@@ -96,25 +96,25 @@ def test_directory_skill_spec_and_resources(project_home) -> None:
 
 
 def test_directory_skill_name_must_match_parent(project_home) -> None:
-    d = project_home / "skills" / "code-review"
+    d = project_home / ".agents" / "skills" / "code-review"
     d.mkdir(parents=True, exist_ok=True)
     (d / "SKILL.md").write_text(
         "---\nname: reviewer\ndescription: mismatch name\n---\nBody\n",
         encoding="utf-8",
     )
-    ix = SkillIndex(project_home / "skills", project_root=project_home)
+    ix = SkillIndex(project_home / ".agents" / "skills", project_root=project_home)
     with pytest.raises(ValueError, match="must match parent directory"):
         ix.scan()
 
 
 def test_skill_name_constraints_enforced(project_home) -> None:
-    d = project_home / "skills" / "bad-name"
+    d = project_home / ".agents" / "skills" / "bad-name"
     d.mkdir(parents=True, exist_ok=True)
     (d / "SKILL.md").write_text(
         "---\nname: Bad-Name\ndescription: invalid case\n---\nBody\n",
         encoding="utf-8",
     )
-    ix = SkillIndex(project_home / "skills", project_root=project_home)
+    ix = SkillIndex(project_home / ".agents" / "skills", project_root=project_home)
     with pytest.raises(ValueError, match="lowercase letters"):
         ix.scan()
 

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "skills-mcp"
 version = "0.1.0"
-description = "Local MCP server: shared skills and rules across harnesses."
+description = "Local MCP server: shared skills and personality rules across AI harnesses."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -13,18 +13,12 @@ dependencies = [
     "pydantic>=2.0",
     "tomli>=2.0.1",
     "PyYAML>=6.0",
-    "python-ulid>=3.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
-]
-# Install vaderSentiment so gemini-docter's sentiment signals work.
-# gemini-docter itself needs no install — just set paths.gemini_docter in config.toml.
-dr = [
-    "vaderSentiment>=3.3.2",
 ]
 
 [project.scripts]
@@ -41,3 +35,6 @@ skills_mcp = ["bundled/**/*"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "integration: marks tests as integration tests (deselect with '-m not integration')",
+]

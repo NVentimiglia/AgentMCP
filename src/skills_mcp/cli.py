@@ -13,19 +13,25 @@ BUNDLED = Path(__file__).resolve().parent / "bundled"
 
 
 def cmd_init(target: Path) -> None:
+    from skills_mcp.mcp_registration import register_all
+
     target = target.resolve()
-    dirs = [
-        target / "skills",
-        target / "rules",
-        target / "state",
-        target / "tests",
-    ]
-    for d in dirs:
-        d.mkdir(parents=True, exist_ok=True)
+    agents_dir = target / ".agents"
+    (agents_dir / "skills").mkdir(parents=True, exist_ok=True)
+
+    # AGENT.md is the primary rules source — plain markdown, no frontmatter needed.
+    agent_md_dst = agents_dir / "AGENT.md"
+    if not agent_md_dst.is_file():
+        shutil.copy2(BUNDLED / "AGENT.md", agent_md_dst)
 
     cfg_dst = target / "config.toml"
     if not cfg_dst.is_file():
         shutil.copy2(BUNDLED / "config.toml", cfg_dst)
+
+    # Register MCP server with all host agents (one-time, idempotent)
+    _ok, msg = register_all(target)
+    for line in msg.splitlines():
+        print(f"  mcp: {line}")
 
 
 
@@ -41,50 +47,16 @@ def cmd_doctor() -> int:
     return run_doctor()
 
 
-def cmd_analyze() -> int:
-    from skills_mcp.analyze import run_analyze
-    from skills_mcp.app_state import init_app
-    from skills_mcp.paths import project_root_from_env_or_discover
-
-    app = init_app(project_root_from_env_or_discover())
-
-    # If the hook fires while the agent is in a different project, CWD won't match
-    # app.root.  Pass CWD as the project_root so Project.md lands in the right place.
-    cwd = Path.cwd().resolve()
-    project_root = cwd if cwd != app.root else None
-
-    return run_analyze(app, project_root=project_root)
-
-
-def cmd_sessions_import(project_path: str | None) -> int:
-    from skills_mcp.app_state import init_app
-    from skills_mcp.paths import project_root_from_env_or_discover
-    from skills_mcp.sessions import import_sessions
-
-    app = init_app(project_root_from_env_or_discover())
-    project_root = Path(project_path).resolve() if project_path else (Path.cwd().resolve())
-    sessions_dir = app.root / ".sessions"
-
-    print(f"sessions: importing from '{project_root.name}' -> {sessions_dir}")
-    imported, skipped = import_sessions(project_root, sessions_dir)
-    print(f"sessions: {imported} imported, {skipped} skipped (already imported or empty)")
-    if imported:
-        print(f"  -> run the learn pass to distill into skills")
-    return 0
-
-
-def cmd_hooks_install(provider: str) -> int:
-    from skills_mcp.hooks import install_hook
+def cmd_mcp_register() -> int:
+    from skills_mcp.mcp_registration import register_all
     from skills_mcp.paths import project_root_from_env_or_discover
 
     root = project_root_from_env_or_discover()
-    ok, msg = install_hook(root, provider=provider)
-    if ok:
-        print(f"hooks: {provider} hook installed -> {msg}")
-        print(f"  analyze will now run automatically after each {provider} turn.")
-    else:
-        print(f"hooks: {msg}")
-    return 0  # idempotent — never a fatal error
+    _ok, msg = register_all(root)
+    for line in msg.splitlines():
+        print(f"mcp: {line}")
+    print("mcp: restart your agent host to pick up the new server entry.")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -93,37 +65,18 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--version", action="store_true", help="Print version")
     sub = parser.add_subparsers(dest="cmd")
 
-    p_init = sub.add_parser("init", help="Create skills/rules layout + config.toml")
+    p_init = sub.add_parser("init", help="Create skills/rules layout + config.toml + register MCP")
     p_init.add_argument("path", nargs="?", default=".", type=Path)
 
     sub.add_parser("serve", help="Run MCP server (stdio)")
 
-    sub.add_parser("doctor", help="Verify install and layout")
+    sub.add_parser("doctor", help="Verify SkillMCP install and layout")
 
-    sub.add_parser(
-        "analyze",
-        help="Run behavioral analysis and write <project>/.memory/dr-*.md",
-    )
-
-    p_sessions = sub.add_parser("sessions", help="Manage session files for the learn pass")
-    p_sessions_sub = p_sessions.add_subparsers(dest="sessions_cmd")
-    p_sess_import = p_sessions_sub.add_parser(
-        "import", help="Import JSONL transcripts from ~/.claude/projects/ into sessions/"
-    )
-    p_sess_import.add_argument(
-        "--project-path",
-        default=None,
-        help="Project to import from (default: CWD)",
-    )
-
-    p_hooks = sub.add_parser("hooks", help="Manage agent hooks for auto-analyze")
-    p_hooks_sub = p_hooks.add_subparsers(dest="hooks_cmd")
-    p_install = p_hooks_sub.add_parser("install", help="Install auto-analyze hook")
-    p_install.add_argument(
-        "--provider",
-        choices=["claude", "gemini"],
-        default="claude",
-        help="Agent to install hook for (default: claude)",
+    p_mcp = sub.add_parser("mcp", help="Manage MCP server registration with host agents")
+    p_mcp_sub = p_mcp.add_subparsers(dest="mcp_cmd")
+    p_mcp_sub.add_parser(
+        "register",
+        help="Register skills-mcp in Claude Code, Gemini, Cursor, and Antigravity configs",
     )
 
     args = parser.parse_args(argv)
@@ -152,19 +105,10 @@ def main(argv: list[str] | None = None) -> None:
     if args.cmd == "doctor":
         sys.exit(cmd_doctor())
 
-    if args.cmd == "analyze":
-        sys.exit(cmd_analyze())
-
-    if args.cmd == "sessions":
-        if args.sessions_cmd == "import":
-            sys.exit(cmd_sessions_import(args.project_path))
-        p_sessions.print_help()
-        sys.exit(1)
-
-    if args.cmd == "hooks":
-        if args.hooks_cmd == "install":
-            sys.exit(cmd_hooks_install(args.provider))
-        p_hooks.print_help()
+    if args.cmd == "mcp":
+        if args.mcp_cmd == "register":
+            sys.exit(cmd_mcp_register())
+        p_mcp.print_help()
         sys.exit(1)
 
     parser.error(f"unknown command {args.cmd}")

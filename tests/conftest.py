@@ -1,4 +1,4 @@
-"""Shared fixtures for SkillsMCP tests."""
+"""Shared fixtures for SkillMCP tests."""
 
 from __future__ import annotations
 
@@ -19,8 +19,7 @@ def _reset_runtime_between_tests():
 
 _TEST_CONFIG = """\
 [paths]
-skills = "skills"
-rules = "rules"
+skills = ".agents/skills"
 """
 
 

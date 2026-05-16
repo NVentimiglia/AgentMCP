@@ -1,11 +1,10 @@
 [paths]
-skills = "skills"
-rules  = "rules"
+skills = ".agents/skills"
 
-# Optional shared content folder containing skills/ and rules/ subdirectories.
-# Project files always win on name/id collision.
+# Optional: shared content folder containing a skills/ subdirectory.
+# Project always wins on name collision.
 # Supports absolute paths or paths relative to this config file.
 # content = ".libraries"
 
-# Legacy: shared skills directory only (use content = ... instead for both skills + rules).
+# Legacy: shared skills directory only (use content = ... instead).
 # shared_skills = ".libraries/skills"
