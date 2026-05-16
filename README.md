@@ -73,7 +73,46 @@ Project-local skills (in `<project>/.agents/skills/`) merge with global. Local w
 | **Claude Code** | `~/.claude/settings.json` |
 | **Gemini CLI** | `~/.gemini/settings.json` |
 | **Cursor** | `~/.cursor/mcp.json` |
-| **Antigravity** | `~/.antigravity/mcp.json` |
+| **Antigravity** | `~/.antigravity/mcp.json` and `~/.gemini/antigravity/mcp_config.json` |
+
+---
+
+## Troubleshooting
+
+### `SKILLS_MCP_ROOT points to invalid path`
+
+The MCP host is using a stale config that references an old project path (e.g. after renaming or moving the project directory).
+
+**Fix:** re-register from the correct project root:
+
+```bash
+cd /path/to/SkillMCP
+skills-mcp mcp register
+```
+
+Then restart the agent host to pick up the new config.
+
+**If the error persists**, the host may be reading from a config file that `mcp register` doesn't know about. Check all registration locations manually:
+
+| Host | Files to check |
+|---|---|
+| Claude Code | `~/.claude/settings.json` |
+| Gemini CLI | `~/.gemini/settings.json` |
+| Cursor | `~/.cursor/mcp.json` |
+| Antigravity | `~/.antigravity/mcp.json`, `~/.gemini/antigravity/mcp_config.json` |
+
+Each file should have a `skills-mcp` entry under `mcpServers` with:
+- `command` pointing to your Python executable
+- `args`: `["-m", "skills_mcp", "serve", "--root", "/path/to/SkillMCP"]`
+- `env.SKILLS_MCP_ROOT` set to the same `/path/to/SkillMCP`
+
+### `Could not find config.toml` (auto-discovery)
+
+The server was launched without `--root` and couldn't locate the project. This happens when:
+- The host config uses `command: "skills-mcp"` with no `--root` arg and no `SKILLS_MCP_ROOT` env
+- The working directory at launch has no `config.toml` in any parent
+
+**Fix:** ensure the config entry passes `--root` explicitly or sets `SKILLS_MCP_ROOT`. Run `skills-mcp mcp register` to rewrite all configs in the correct format.
 
 ---
 

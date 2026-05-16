@@ -36,11 +36,36 @@ def _save_json(path: Path, data: dict) -> None:
 
 def _server_entry(project_root: Path) -> dict:
     """Build the mcpServers entry for this installation."""
+    root_path = str(project_root.resolve())
     return {
         "command": sys.executable,
-        "args": ["-m", "skills_mcp", "serve"],
-        "env": {"SKILLS_MCP_ROOT": str(project_root.resolve())},
+        "args": ["-m", "skills_mcp", "serve", "--root", root_path],
+        "env": {"SKILLS_MCP_ROOT": root_path},
     }
+
+
+def _register_host(settings_path: Path, project_root: Path) -> tuple[bool, str]:
+    """Generic registration logic for any host."""
+    data = _load_json(settings_path)
+    servers = data.setdefault("mcpServers", {})
+    entry = _server_entry(project_root)
+
+    if _SERVER_KEY in servers:
+        existing = servers[_SERVER_KEY]
+        # If the registration is identical, skip to avoid unnecessary writes
+        if (
+            existing.get("command") == entry["command"]
+            and existing.get("args") == entry["args"]
+            and existing.get("env", {}).get("SKILLS_MCP_ROOT") == entry["env"]["SKILLS_MCP_ROOT"]
+        ):
+            return False, f"already registered ({settings_path})"
+
+    servers[_SERVER_KEY] = entry
+    try:
+        _save_json(settings_path, data)
+    except OSError as exc:
+        return False, f"could not write {settings_path}: {exc}"
+    return True, str(settings_path)
 
 
 # ---------------------------------------------------------------------------
@@ -56,15 +81,7 @@ def claude_registered() -> bool:
 
 
 def register_claude(project_root: Path) -> tuple[bool, str]:
-    if claude_registered():
-        return False, f"already registered ({_CLAUDE_SETTINGS})"
-    data = _load_json(_CLAUDE_SETTINGS)
-    data.setdefault("mcpServers", {})[_SERVER_KEY] = _server_entry(project_root)
-    try:
-        _save_json(_CLAUDE_SETTINGS, data)
-    except OSError as exc:
-        return False, f"could not write {_CLAUDE_SETTINGS}: {exc}"
-    return True, str(_CLAUDE_SETTINGS)
+    return _register_host(_CLAUDE_SETTINGS, project_root)
 
 
 # ---------------------------------------------------------------------------
@@ -80,15 +97,7 @@ def cursor_registered() -> bool:
 
 
 def register_cursor(project_root: Path) -> tuple[bool, str]:
-    if cursor_registered():
-        return False, f"already registered ({_CURSOR_SETTINGS})"
-    data = _load_json(_CURSOR_SETTINGS)
-    data.setdefault("mcpServers", {})[_SERVER_KEY] = _server_entry(project_root)
-    try:
-        _save_json(_CURSOR_SETTINGS, data)
-    except OSError as exc:
-        return False, f"could not write {_CURSOR_SETTINGS}: {exc}"
-    return True, str(_CURSOR_SETTINGS)
+    return _register_host(_CURSOR_SETTINGS, project_root)
 
 
 # ---------------------------------------------------------------------------
@@ -104,15 +113,7 @@ def gemini_registered() -> bool:
 
 
 def register_gemini(project_root: Path) -> tuple[bool, str]:
-    if gemini_registered():
-        return False, f"already registered ({_GEMINI_SETTINGS})"
-    data = _load_json(_GEMINI_SETTINGS)
-    data.setdefault("mcpServers", {})[_SERVER_KEY] = _server_entry(project_root)
-    try:
-        _save_json(_GEMINI_SETTINGS, data)
-    except OSError as exc:
-        return False, f"could not write {_GEMINI_SETTINGS}: {exc}"
-    return True, str(_GEMINI_SETTINGS)
+    return _register_host(_GEMINI_SETTINGS, project_root)
 
 
 # ---------------------------------------------------------------------------
@@ -121,22 +122,22 @@ def register_gemini(project_root: Path) -> tuple[bool, str]:
 
 _ANTIGRAVITY_SETTINGS = Path.home() / ".antigravity" / "mcp.json"
 
+# Antigravity also reads from ~/.gemini/antigravity/mcp_config.json
+_ANTIGRAVITY_GEMINI_SETTINGS = Path.home() / ".gemini" / "antigravity" / "mcp_config.json"
+
 
 def antigravity_registered() -> bool:
     data = _load_json(_ANTIGRAVITY_SETTINGS)
-    return _SERVER_KEY in (data.get("mcpServers") or {})
+    data2 = _load_json(_ANTIGRAVITY_GEMINI_SETTINGS)
+    return _SERVER_KEY in (data.get("mcpServers") or {}) or _SERVER_KEY in (data2.get("mcpServers") or {})
 
 
 def register_antigravity(project_root: Path) -> tuple[bool, str]:
-    if antigravity_registered():
-        return False, f"already registered ({_ANTIGRAVITY_SETTINGS})"
-    data = _load_json(_ANTIGRAVITY_SETTINGS)
-    data.setdefault("mcpServers", {})[_SERVER_KEY] = _server_entry(project_root)
-    try:
-        _save_json(_ANTIGRAVITY_SETTINGS, data)
-    except OSError as exc:
-        return False, f"could not write {_ANTIGRAVITY_SETTINGS}: {exc}"
-    return True, str(_ANTIGRAVITY_SETTINGS)
+    ok1, msg1 = _register_host(_ANTIGRAVITY_SETTINGS, project_root)
+    ok2, msg2 = _register_host(_ANTIGRAVITY_GEMINI_SETTINGS, project_root)
+    ok = ok1 or ok2
+    msg = "; ".join(m for m in [msg1, msg2] if m)
+    return ok, msg
 
 
 # ---------------------------------------------------------------------------

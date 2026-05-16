@@ -35,10 +35,10 @@ def cmd_init(target: Path) -> None:
 
 
 
-def cmd_serve() -> None:
+def cmd_serve(root: Path | None = None) -> None:
     from skills_mcp.server import run_stdio_server
 
-    run_stdio_server()
+    run_stdio_server(root=root)
 
 
 def cmd_doctor() -> int:
@@ -68,7 +68,8 @@ def main(argv: list[str] | None = None) -> None:
     p_init = sub.add_parser("init", help="Create skills/rules layout + config.toml + register MCP")
     p_init.add_argument("path", nargs="?", default=".", type=Path)
 
-    sub.add_parser("serve", help="Run MCP server (stdio)")
+    p_serve = sub.add_parser("serve", help="Run MCP server (stdio)")
+    p_serve.add_argument("--root", type=Path, help="Project root directory")
 
     sub.add_parser("doctor", help="Verify SkillMCP install and layout")
 
@@ -99,7 +100,7 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     if args.cmd == "serve":
-        cmd_serve()
+        cmd_serve(root=args.root)
         return
 
     if args.cmd == "doctor":

@@ -8,11 +8,7 @@ CONFIG_NAME = "config.toml"
 
 def _looks_like_agent_project(root: Path) -> bool:
     """Return True if the directory looks like a skills-mcp project."""
-    # New convention: .agents/ folder
-    if (root / ".agents").is_dir():
-        return True
-    # Legacy: skills/ + rules/ at root level
-    return (root / "skills").is_dir() and (root / "rules").is_dir()
+    return (root / ".agents").is_dir()
 
 
 def find_project_root(start: Path | None = None) -> Path:
@@ -22,18 +18,30 @@ def find_project_root(start: Path | None = None) -> Path:
         if (p / CONFIG_NAME).is_file() and _looks_like_agent_project(p):
             return p
     raise FileNotFoundError(
-        f"Could not find {CONFIG_NAME} in {cur} or any parent directory. "
-        "Run `skills-mcp init` or set SKILLS_MCP_ROOT (or legacy AGENT_MCP_ROOT) to a project directory."
+        f"Could not find {CONFIG_NAME} in '{cur}' or any parent directory. "
+        "Run `skills-mcp init` to create a project, or set the SKILLS_MCP_ROOT "
+        "environment variable to your project directory."
     )
 
 
 def project_root_from_env_or_discover() -> Path:
-    env = os.environ.get("SKILLS_MCP_ROOT") or os.environ.get("AGENT_MCP_ROOT")
-    if env:
-        root = Path(env).expanduser().resolve()
-        if not (root / CONFIG_NAME).is_file():
+    env_key = "SKILLS_MCP_ROOT"
+    val = os.environ.get(env_key)
+
+    if val:
+        root = Path(val).expanduser().resolve()
+        if root.is_dir() and (root / CONFIG_NAME).is_file():
+            return root
+        # If env var is set but invalid, we don't crash yet.
+        # We'll try discovery and only crash if that also fails.
+
+    try:
+        return find_project_root()
+    except FileNotFoundError as e:
+        if val:
+            # If discovery failed AND we had an invalid env var, report both
             raise FileNotFoundError(
-                f"SKILLS_MCP_ROOT/AGENT_MCP_ROOT={root} has no {CONFIG_NAME}"
-            )
-        return root
-    return find_project_root()
+                f"Could not find SkillsMCP project. Environment variable {env_key} points to "
+                f"invalid path '{val}', and auto-discovery from current directory failed: {e}"
+            ) from e
+        raise

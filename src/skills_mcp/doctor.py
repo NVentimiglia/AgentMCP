@@ -6,7 +6,7 @@ from pathlib import Path
 from skills_mcp.config import load_config
 from skills_mcp.config_paths import resolve_content_dir, resolve_shared_skills_dir
 from skills_mcp.mcp_registration import registration_status
-from skills_mcp.paths import CONFIG_NAME, find_project_root
+from skills_mcp.paths import CONFIG_NAME, project_root_from_env_or_discover
 
 
 def run_doctor() -> int:
@@ -14,7 +14,7 @@ def run_doctor() -> int:
     warn: list[str] = []
 
     try:
-        root = find_project_root()
+        root = project_root_from_env_or_discover()
     except Exception as e:
         fatal.append(f"project root: {e}")
         _print(fatal, warn)
@@ -70,19 +70,6 @@ def run_doctor() -> int:
                 f"{host}: skills-mcp server not registered — run `skills-mcp mcp register` "
                 f"(serve will not start automatically without this)"
             )
-
-    # Cursor: check for deprecated key
-    cursor_cfg = Path.home() / ".cursor" / "mcp.json"
-    if cursor_cfg.is_file():
-        try:
-            raw = json.loads(cursor_cfg.read_text(encoding="utf-8"))
-            servers = (raw.get("mcpServers") or {}) if isinstance(raw, dict) else {}
-            if "agent-mcp" in servers and "skills-mcp" not in servers:
-                warn.append(
-                    "Cursor MCP still uses deprecated `agent-mcp` key — rename to `skills-mcp` in ~/.cursor/mcp.json"
-                )
-        except Exception as e:
-            warn.append(f"unable to parse ~/.cursor/mcp.json: {e}")
 
     _print(fatal, warn)
     return 1 if fatal else 0

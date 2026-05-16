@@ -26,7 +26,11 @@ def configure_for_tests(root: Path) -> AppContext:
 def configure(root: Path | None = None) -> AppContext:
     global _SKILLS, _APP
     if root is None:
-        root = project_root_from_env_or_discover()
+        try:
+            root = project_root_from_env_or_discover()
+        except FileNotFoundError as e:
+            # Re-raise with more context if we are in the middle of a tool call
+            raise RuntimeError(f"Cannot initialize SkillsMCP: {e}") from e
     _APP = init_app(root)
 
     lib_roots: tuple[Path, ...] = ()
@@ -59,9 +63,8 @@ def reset_runtime() -> None:
 
 def _require_runtime() -> tuple[SkillIndex, AppContext]:
     if _SKILLS is None or _APP is None:
+        # If not already configured, try to auto-discover
         configure()
-    assert _SKILLS is not None
-    assert _APP is not None
     return _SKILLS, _APP
 
 
@@ -175,8 +178,8 @@ def read_skill(name: str, project_path: str = "", usage_reason: str = "", sessio
     return _run_traced("read_skill", lambda: _impl_read_skill(name, project_path, usage_reason))
 
 
-def run_stdio_server() -> None:
-    configure()
+def run_stdio_server(root: Path | None = None) -> None:
+    configure(root=root)
     mcp.run(transport="stdio")
 
 

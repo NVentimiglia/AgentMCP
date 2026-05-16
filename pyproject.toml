@@ -22,9 +22,7 @@ dev = [
 ]
 
 [project.scripts]
-# Canonical name; ``agent-mcp`` is a legacy alias (Cursor configs, env AGENT_MCP_ROOT).
 skills-mcp = "skills_mcp.cli:main"
-agent-mcp = "skills_mcp.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
