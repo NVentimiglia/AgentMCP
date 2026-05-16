@@ -36,11 +36,13 @@ import textwrap
 from pathlib import Path
 
 
+import tempfile
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-TMP_ROOT = Path("d:/tmp/skills-mcp-itest")
+TMP_ROOT = Path(tempfile.gettempdir()) / "skills-mcp-itest"
 TMP_PROJECT_A = TMP_ROOT / "project-a"
 TMP_PROJECT_B = TMP_ROOT / "project-b"
 
