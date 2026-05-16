@@ -39,11 +39,12 @@ def _server_entry(project_root: Path) -> dict:
     root_path = str(project_root.resolve())
     env: dict[str, str] = {"SKILLS_MCP_ROOT": root_path}
 
-    # Auto-include the global skills library shipped with this SkillMCP install.
-    # Path: <package-root>/.agents/skills  (two levels up from src/skills_mcp/)
-    pkg_skills = Path(__file__).resolve().parent.parent.parent / ".agents" / "skills"
-    if pkg_skills.is_dir():
-        env["SKILLS_MCP_LIBRARY"] = str(pkg_skills)
+    # Auto-include the bundled agent folder shipped with this SkillMCP install.
+    # Path: <package-root>/.agents  (two levels up from src/skills_mcp/)
+    # AGENT.md from this folder is injected; skills/ subdir is scanned for skills.
+    pkg_agent = Path(__file__).resolve().parent.parent.parent / ".agents"
+    if pkg_agent.is_dir():
+        env["SKILLS_MCP_LIBRARY"] = str(pkg_agent)
 
     return {
         "command": sys.executable,

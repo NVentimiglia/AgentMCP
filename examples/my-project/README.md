@@ -4,7 +4,7 @@ Demonstrates the minimal layout for a project using SkillMCP.
 
 ```
 my-project/
-├── skillmcp.toml              ← skill folder config (created by skills-mcp init)
+├── skillmcp.toml              ← agent folder config (created by skills-mcp init)
 └── .agents/
     ├── AGENT.md               ← behavioral rules injected every session
     └── skills/

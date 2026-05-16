@@ -31,12 +31,12 @@ def run_doctor() -> int:
 
     if cfg is not None:
         from skills_mcp.config import resolve_path
-        for folder in cfg.skill_folders:
+        for folder in cfg.agent_folders:
             d = resolve_path(root, folder)
             if not d.is_dir():
                 warn.append(
-                    f"skill_folder '{folder}' does not exist yet "
-                    "(create it or remove from skill_folders)"
+                    f"agent_folder '{folder}' does not exist yet "
+                    "(create it or remove from agent_folders)"
                 )
 
     # MCP server registration

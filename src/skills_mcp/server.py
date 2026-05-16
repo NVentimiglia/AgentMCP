@@ -34,17 +34,21 @@ def configure(root: Path | None = None) -> AppContext:
     _APP = init_app(root)
     _SKILLS = SkillIndex(_APP.skill_dirs, project_root=_APP.root)
     _SKILLS.scan()
-    agent_md = _load_agent_md(_APP.root)
+    agent_md = _load_agent_md(_APP.agent_dirs)
     mcp._mcp_server.instructions = render_mcp_seed_text(agent_md_content=agent_md)
     return _APP
 
 
-def _load_agent_md(root: Path) -> str | None:
-    """Read .agents/AGENT.md if present; return its content, else None."""
-    path = root / ".agents" / "AGENT.md"
-    if path.is_file():
-        return path.read_text(encoding="utf-8").strip()
-    return None
+def _load_agent_md(agent_dirs: list[Path]) -> str | None:
+    """Read AGENT.md from each agent folder; return combined content, else None."""
+    parts = []
+    for d in agent_dirs:
+        path = d / "AGENT.md"
+        if path.is_file():
+            content = path.read_text(encoding="utf-8").strip()
+            if content:
+                parts.append(content)
+    return "\n\n".join(parts) if parts else None
 
 
 def reset_runtime() -> None:
@@ -77,7 +81,7 @@ def _impl_verify_setup() -> str:
         if not d.is_dir():
             issues.append(f"skill_dir_missing: {d}")
     if not app.skill_dirs:
-        issues.append("no skill_folders configured")
+        issues.append("no agent_folders configured")
 
     meta = skills.list_skills_meta()
 
@@ -105,11 +109,12 @@ def _local_skill_index(project_path: str, app: AppContext) -> "SkillIndex | None
     local_root = Path(project_path.strip()).resolve()
     if local_root == app.root:
         return None
-    # Load skill_folders from local skillmcp.toml if present, else default
+    # Load agent_folders from local skillmcp.toml if present, else default
     local_cfg_path = local_root / "skillmcp.toml"
     if local_cfg_path.is_file():
         local_cfg = load_config(local_root)
-        dirs = [resolve_path(local_root, f) for f in local_cfg.skill_folders]
+        agent_dirs = [resolve_path(local_root, f) for f in local_cfg.agent_folders]
+        dirs = [d / "skills" for d in agent_dirs]
     else:
         default = local_root / ".agents" / "skills"
         if not default.is_dir():

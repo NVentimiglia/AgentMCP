@@ -23,11 +23,23 @@ Restart your agent host to pick up the new skills and rules.
 
 Injects knowledge into every agent session automatically via the MCP instruction block.
 
-| Feature | Source | Interaction |
-|---|---|---|
-| **Behavioral Rules** | `.agents/AGENT.md` | Injected into the system prompt automatically |
-| **Skill Library** | `.agents/skills/` | Agent calls `list_skills` / `read_skill` as needed |
-| **Project Overrides** | `skillmcp.toml` | Local skills override global on name collision |
+### AGENT.md — behavioral rules
+
+Markdown files injected into the system prompt at session start. All sources are combined; none are dropped.
+
+| Source | Location |
+|---|---|
+| Bundled (SkillMCP install) | `<skillmcp>/.agents/AGENT.md` |
+| Configured agent folders | `AGENT.md` in each `agent_folders` entry |
+
+### Skills — on-demand knowledge
+
+Markdown skill files the agent fetches with `list_skills` / `read_skill` as needed. Later entries in `agent_folders` win on name collision.
+
+| Source | Location |
+|---|---|
+| Bundled (SkillMCP install) | `<skillmcp>/.agents/skills/` |
+| Configured agent folders | `skills/` subdir of each `agent_folders` entry |
 
 ---
 
@@ -44,14 +56,18 @@ Injects knowledge into every agent session automatically via the MCP instruction
    ```
 
 3. **Configure**
-   Edit `skillmcp.toml` to add external skill folders. Last entry wins on collision.
+   Edit `skillmcp.toml` to add agent folders. Last entry wins on collision.
 
    ```toml
-   skill_folders = [
-       "/path/to/shared/skills", 
-       ".agents/skills",
+   agent_folders = [
+       "/path/to/shared/agents",
+       ".agents/",
    ]
    ```
+
+   Each agent folder can contain:
+   - `AGENT.md` — behavioral rules injected into every session (all folders combined)
+   - `skills/` — skill library scanned for `list_skills` / `read_skill`
 
 ---
 
