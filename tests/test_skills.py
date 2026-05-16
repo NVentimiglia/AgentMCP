@@ -17,7 +17,7 @@ def test_skill_index_rejects_duplicate_names(tmp_path) -> None:
     (d / "b.md").write_text(
         "---\nname: dup\ndescription: B\ntriggers: []\n---\nBody B\n", encoding="utf-8"
     )
-    ix = SkillIndex(d, project_root=tmp_path)
+    ix = SkillIndex([d], project_root=tmp_path)
     with pytest.raises(ValueError, match="duplicate"):
         ix.scan()
 
@@ -27,7 +27,7 @@ def test_skill_missing_frontmatter_skipped(tmp_path) -> None:
     # ignored so they can coexist in the skills directory without crashing.
     p = tmp_path / "x.md"
     p.write_text("no frontmatter\n", encoding="utf-8")
-    ix = SkillIndex(tmp_path, project_root=tmp_path)
+    ix = SkillIndex([tmp_path], project_root=tmp_path)
     ix.scan()
     assert list(ix.list_skills_meta()) == []
 
@@ -102,20 +102,23 @@ def test_directory_skill_name_must_match_parent(project_home) -> None:
         "---\nname: reviewer\ndescription: mismatch name\n---\nBody\n",
         encoding="utf-8",
     )
-    ix = SkillIndex(project_home / ".agents" / "skills", project_root=project_home)
+    ix = SkillIndex([project_home / ".agents" / "skills"], project_root=project_home)
     with pytest.raises(ValueError, match="must match parent directory"):
         ix.scan()
 
 
 def test_skill_name_constraints_enforced(project_home) -> None:
+    """A SKILL.md with an invalid name is silently skipped (warn+skip keeps server alive)."""
     d = project_home / ".agents" / "skills" / "bad-name"
     d.mkdir(parents=True, exist_ok=True)
     (d / "SKILL.md").write_text(
         "---\nname: Bad-Name\ndescription: invalid case\n---\nBody\n",
         encoding="utf-8",
     )
-    ix = SkillIndex(project_home / ".agents" / "skills", project_root=project_home)
-    with pytest.raises(ValueError, match="lowercase letters"):
-        ix.scan()
+    ix = SkillIndex([project_home / ".agents" / "skills"], project_root=project_home)
+    ix.scan()  # must NOT raise — invalid skill is warned and skipped
+    names = [s["name"] for s in ix.list_skills_meta()]
+    assert "Bad-Name" not in names
+    assert "bad-name" not in names
 
 

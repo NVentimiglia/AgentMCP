@@ -44,6 +44,8 @@ def _patch_all(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr("skills_mcp.mcp_registration._CURSOR_SETTINGS", _fake_cursor_settings(tmp_path))
     monkeypatch.setattr("skills_mcp.mcp_registration._GEMINI_SETTINGS", _fake_gemini_settings(tmp_path))
     monkeypatch.setattr("skills_mcp.mcp_registration._ANTIGRAVITY_SETTINGS", _fake_antigravity_settings(tmp_path))
+    monkeypatch.setattr("skills_mcp.mcp_registration._ANTIGRAVITY_GEMINI_SETTINGS",
+                        tmp_path / ".gemini" / "antigravity" / "mcp_config.json")
 
 
 # ---------------------------------------------------------------------------

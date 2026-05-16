@@ -1,4 +1,0 @@
-# SkillsMCP Project Rules
-
-1. Start each session by summarizing the task, skim **`rules/*.md`**, honour MCP **`instructions`** when surfaced, call **`list_skills` → `read_skill`** only when a project skill clearly applies.
-2. Keep changes small and idiomatic versus existing `src/skills_mcp/` style.

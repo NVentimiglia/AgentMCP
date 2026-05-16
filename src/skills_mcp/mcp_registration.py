@@ -37,10 +37,18 @@ def _save_json(path: Path, data: dict) -> None:
 def _server_entry(project_root: Path) -> dict:
     """Build the mcpServers entry for this installation."""
     root_path = str(project_root.resolve())
+    env: dict[str, str] = {"SKILLS_MCP_ROOT": root_path}
+
+    # Auto-include the global skills library shipped with this SkillMCP install.
+    # Path: <package-root>/.agents/skills  (two levels up from src/skills_mcp/)
+    pkg_skills = Path(__file__).resolve().parent.parent.parent / ".agents" / "skills"
+    if pkg_skills.is_dir():
+        env["SKILLS_MCP_LIBRARY"] = str(pkg_skills)
+
     return {
         "command": sys.executable,
         "args": ["-m", "skills_mcp", "serve", "--root", root_path],
-        "env": {"SKILLS_MCP_ROOT": root_path},
+        "env": env,
     }
 
 

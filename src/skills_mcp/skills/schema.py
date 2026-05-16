@@ -13,6 +13,8 @@ class SkillFrontmatter(BaseModel):
     description: str = Field(..., min_length=1)
     # Legacy v0.1 field; still supported.
     triggers: list[str] = Field(default_factory=list)
+    # One-line activation condition for this skill
+    trigger: str | None = None
     # Agent Skills optional fields
     license: str | None = None
     compatibility: str | None = None

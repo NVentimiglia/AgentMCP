@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import logging
 import re
-from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -9,6 +9,8 @@ from typing import Any
 import yaml
 
 from skills_mcp.skills.schema import ParsedSkill, SkillFrontmatter
+
+log = logging.getLogger(__name__)
 
 
 def _rel_display(path: Path, project_root: Path) -> str:
@@ -99,12 +101,16 @@ def _gather_tree_into_dict(scan_root: Path, project_root: Path) -> dict[str, Loa
 
     for sk in dir_skill_files:
         rd = sk.parent.resolve()
-        ls = parse_skill_file(
-            sk,
-            project_root=project_root,
-            skill_disk_root=rd,
-            fmt="directory",
-        )
+        try:
+            ls = parse_skill_file(
+                sk,
+                project_root=project_root,
+                skill_disk_root=rd,
+                fmt="directory",
+            )
+        except ValueError as exc:
+            log.warning("Skipping invalid skill file %s: %s", sk, exc)
+            continue
         if ls.parsed.fm.name != rd.name:
             raise ValueError(
                 f"skill name `{ls.parsed.fm.name}` must match parent directory `{rd.name}` "
@@ -127,12 +133,16 @@ def _gather_tree_into_dict(scan_root: Path, project_root: Path) -> dict[str, Loa
     for ls in loaded:
         paths_by_name.setdefault(ls.parsed.fm.name, []).append(ls)
     for p in legacy_files:
-        ls = parse_skill_file(
-            p,
-            project_root=project_root,
-            skill_disk_root=p.parent,
-            fmt="legacy_file",
-        )
+        try:
+            ls = parse_skill_file(
+                p,
+                project_root=project_root,
+                skill_disk_root=p.parent,
+                fmt="legacy_file",
+            )
+        except ValueError as exc:
+            log.warning("Skipping invalid skill file %s: %s", p, exc)
+            continue
         if ls is not None:
             paths_by_name.setdefault(ls.parsed.fm.name, []).append(ls)
 
@@ -147,37 +157,28 @@ def _gather_tree_into_dict(scan_root: Path, project_root: Path) -> dict[str, Loa
 class SkillIndex:
     def __init__(
         self,
-        project_skills_dir: Path,
+        skill_dirs: list[Path],
         *,
         project_root: Path,
-        library_skill_dirs: Sequence[Path] | None = None,
     ) -> None:
-        self.project_skills_dir = project_skills_dir.resolve()
         self.project_root = project_root.resolve()
-        lib: list[Path] = []
-        for p in (library_skill_dirs or ()):
-            if p is None:
-                continue
-            xp = Path(p).expanduser().resolve()
-            if xp.is_dir():
-                lib.append(xp)
-        self._library_roots = tuple(sorted(set(lib)))
+        self._skill_dirs: list[Path] = []
+        seen: set[Path] = set()
+        for p in skill_dirs:
+            rp = Path(p).expanduser().resolve()
+            if rp not in seen and rp.is_dir():
+                self._skill_dirs.append(rp)
+                seen.add(rp)
         self._by_name: dict[str, LoadedSkill] = {}
 
     def scan(self) -> None:
         merged: dict[str, LoadedSkill] = {}
-
-        for lib_root in sorted(self._library_roots):
-            if lib_root.resolve() == self.project_skills_dir.resolve():
-                continue
-            blob = _gather_tree_into_dict(lib_root, self.project_root)
+        last = len(self._skill_dirs) - 1
+        for i, skill_dir in enumerate(self._skill_dirs):
+            blob = _gather_tree_into_dict(skill_dir, self.project_root)
+            origin = "project" if i == last else "library"
             for name, sk in blob.items():
-                merged[name] = replace(sk, catalog_origin="library")
-
-        proj_blob = _gather_tree_into_dict(self.project_skills_dir, self.project_root)
-        for name, sk in proj_blob.items():
-            merged[name] = replace(sk, catalog_origin="project")
-
+                merged[name] = replace(sk, catalog_origin=origin)
         self._by_name = merged
 
     def list_skills_meta(self) -> list[dict[str, Any]]:

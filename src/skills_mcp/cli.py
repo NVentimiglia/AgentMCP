@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-import shutil
 import sys
 from pathlib import Path
 
@@ -16,19 +15,18 @@ def cmd_init(target: Path) -> None:
     from skills_mcp.mcp_registration import register_all
 
     target = target.resolve()
-    agents_dir = target / ".agents"
-    (agents_dir / "skills").mkdir(parents=True, exist_ok=True)
+    (target / ".agents" / "skills").mkdir(parents=True, exist_ok=True)
 
-    # AGENT.md is the primary rules source — plain markdown, no frontmatter needed.
-    agent_md_dst = agents_dir / "AGENT.md"
-    if not agent_md_dst.is_file():
-        shutil.copy2(BUNDLED / "AGENT.md", agent_md_dst)
-
-    cfg_dst = target / "config.toml"
+    cfg_dst = target / "skillmcp.toml"
     if not cfg_dst.is_file():
-        shutil.copy2(BUNDLED / "config.toml", cfg_dst)
+        bundled_cfg = BUNDLED / "skillmcp.toml"
+        cfg_dst.write_text(bundled_cfg.read_text(encoding="utf-8"), encoding="utf-8")
 
-    # Register MCP server with all host agents (one-time, idempotent)
+    agent_md_dst = target / ".agents" / "AGENT.md"
+    if not agent_md_dst.is_file():
+        bundled_agent_md = BUNDLED / "AGENT.md"
+        agent_md_dst.write_text(bundled_agent_md.read_text(encoding="utf-8"), encoding="utf-8")
+
     _ok, msg = register_all(target)
     for line in msg.splitlines():
         print(f"  mcp: {line}")
@@ -65,7 +63,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--version", action="store_true", help="Print version")
     sub = parser.add_subparsers(dest="cmd")
 
-    p_init = sub.add_parser("init", help="Create skills/rules layout + config.toml + register MCP")
+    p_init = sub.add_parser("init", help="Create skills layout + skillmcp.toml + register MCP")
     p_init.add_argument("path", nargs="?", default=".", type=Path)
 
     p_serve = sub.add_parser("serve", help="Run MCP server (stdio)")

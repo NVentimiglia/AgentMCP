@@ -18,7 +18,7 @@ triggers:
 
 # Planner (`role-plan`)
 
-Do not modify source code in this skill.
+Do not write or modify source code during planning.
 Wait for explicit user approval before coding.
 
 When requirements or root causes are ambiguous, invoke **`role-research`** before planning.

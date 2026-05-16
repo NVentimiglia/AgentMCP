@@ -11,8 +11,8 @@ def test_verify_setup_reports_paths_and_counts(project_home) -> None:
     rep = json.loads(raw)
     assert rep["skills_count"] >= 0
     assert isinstance(rep["issues"], list)
-    assert "paths" in rep
-    assert "state_dir" in rep["paths"]
+    assert "skill_dirs" in rep
+    assert isinstance(rep["skill_dirs"], list)
     assert "skills_count" in rep
 
 

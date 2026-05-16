@@ -15,9 +15,8 @@ def test_skill_index_merges_shared_skills_under_unique_names(project_home: Path)
     )
 
     ix = SkillIndex(
-        project_home / ".agents" / "skills",
+        [central, project_home / ".agents" / "skills"],
         project_root=project_home,
-        library_skill_dirs=(central,),
     )
     ix.scan()
 
@@ -42,14 +41,13 @@ def test_project_skill_shadows_shared_catalog_on_name(project_home: Path) -> Non
         encoding="utf-8",
     )
 
+    # Library first, project last → project wins
     ix = SkillIndex(
-        project_home / ".agents" / "skills",
+        [central, project_home / ".agents" / "skills"],
         project_root=project_home,
-        library_skill_dirs=(central,),
     )
     ix.scan()
 
     twin = ix.get_by_name("twin-skill")
     assert "FROM-PROJECT" in twin.parsed.body
     assert twin.catalog_origin == "project"
-

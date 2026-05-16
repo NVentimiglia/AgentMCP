@@ -1,0 +1,14 @@
+# SkillMCP project configuration
+#
+# skill_folders: ordered list of directories to scan for skills.
+# Later entries take priority on name collision.
+# Supports absolute paths or paths relative to this file.
+skill_folders = [
+    ".agents/skills",
+]
+
+# Example: merge a shared library before project-local skills.
+# skill_folders = [
+#     "/path/to/shared/skills",
+#     ".agents/skills",
+# ]

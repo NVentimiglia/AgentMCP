@@ -3,19 +3,14 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-CONFIG_NAME = "config.toml"
-
-
-def _looks_like_agent_project(root: Path) -> bool:
-    """Return True if the directory looks like a skills-mcp project."""
-    return (root / ".agents").is_dir()
+CONFIG_NAME = "skillmcp.toml"
 
 
 def find_project_root(start: Path | None = None) -> Path:
-    """Walk upward from `start` (default: cwd) until a skills-mcp project's config.toml is found."""
+    """Walk upward from `start` (default: cwd) until a skillmcp.toml is found."""
     cur = (start or Path.cwd()).resolve()
     for p in [cur, *cur.parents]:
-        if (p / CONFIG_NAME).is_file() and _looks_like_agent_project(p):
+        if (p / CONFIG_NAME).is_file():
             return p
     raise FileNotFoundError(
         f"Could not find {CONFIG_NAME} in '{cur}' or any parent directory. "
@@ -32,14 +27,11 @@ def project_root_from_env_or_discover() -> Path:
         root = Path(val).expanduser().resolve()
         if root.is_dir() and (root / CONFIG_NAME).is_file():
             return root
-        # If env var is set but invalid, we don't crash yet.
-        # We'll try discovery and only crash if that also fails.
 
     try:
         return find_project_root()
     except FileNotFoundError as e:
         if val:
-            # If discovery failed AND we had an invalid env var, report both
             raise FileNotFoundError(
                 f"Could not find SkillsMCP project. Environment variable {env_key} points to "
                 f"invalid path '{val}', and auto-discovery from current directory failed: {e}"

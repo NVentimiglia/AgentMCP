@@ -1,34 +1,22 @@
-"""Tests for paths.content — shared skills content folder."""
+"""Tests for skill_folders — multiple skill directories merging."""
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
-from skills_mcp.cli import cmd_init
 from skills_mcp.app_state import init_app
+from skills_mcp.cli import cmd_init
 from skills_mcp.server import configure_for_tests, list_skills, reset_runtime
-
-import json
-
-_CONFIG_WITH_CONTENT = """\
-[paths]
-skills  = ".agents/skills"
-content = "{content}"
-"""
-
-_CONFIG_NO_CONTENT = """\
-[paths]
-skills = ".agents/skills"
-"""
 
 
 def _make_project(tmp_path: Path, config: str, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("SKILLS_MCP_ROOT", str(tmp_path))
     monkeypatch.chdir(tmp_path)
     cmd_init(tmp_path)
-    (tmp_path / "config.toml").write_text(config, encoding="utf-8")
+    (tmp_path / "skillmcp.toml").write_text(config, encoding="utf-8")
     return tmp_path
 
 
@@ -45,50 +33,41 @@ def _write_skill(directory: Path, name: str, description: str = "A skill") -> No
 # ---------------------------------------------------------------------------
 
 
-def test_content_dir_populates_shared_skills(
+def test_skill_dirs_populated_from_config(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    content = tmp_path / "shared"
-    (content / "skills").mkdir(parents=True)
+    shared = tmp_path / "shared_skills"
+    shared.mkdir()
 
-    cfg = _CONFIG_WITH_CONTENT.format(content=content.as_posix())
+    cfg = f'skill_folders = ["{shared.as_posix()}", ".agents/skills"]\n'
     root = _make_project(tmp_path, cfg, monkeypatch)
     app = init_app(root)
 
-    assert app.shared_skills_dir == content / "skills"
+    assert len(app.skill_dirs) == 2
+    assert app.skill_dirs[0] == shared.resolve()
+    assert app.skill_dirs[1] == (root / ".agents" / "skills").resolve()
 
 
-def test_content_dir_missing_subdir_gives_none(
+def test_missing_skill_dir_excluded_from_index(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    content = tmp_path / "shared"
-    content.mkdir()
-    # No skills/ subdirectory
-
-    cfg = _CONFIG_WITH_CONTENT.format(content=content.as_posix())
+    nonexistent = tmp_path / "ghost_skills"
+    cfg = f'skill_folders = ["{nonexistent.as_posix()}", ".agents/skills"]\n'
     root = _make_project(tmp_path, cfg, monkeypatch)
     app = init_app(root)
+    # ghost dir not on disk — SkillIndex silently skips it
+    configure_for_tests(root)
+    skills = json.loads(list_skills())
+    assert isinstance(skills, list)
 
-    assert app.shared_skills_dir is None
 
-
-def test_shared_skills_explicit_wins_over_content(
+def test_single_folder_default(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    content = tmp_path / "shared"
-    (content / "skills").mkdir(parents=True)
-    explicit_skills = tmp_path / "other_skills"
-    explicit_skills.mkdir()
-
-    cfg = (
-        f'[paths]\nskills = ".agents/skills"\n'
-        f'shared_skills = "{explicit_skills.as_posix()}"\n'
-        f'content = "{content.as_posix()}"\n'
-    )
+    cfg = 'skill_folders = [".agents/skills"]\n'
     root = _make_project(tmp_path, cfg, monkeypatch)
     app = init_app(root)
-
-    assert app.shared_skills_dir == explicit_skills
+    assert len(app.skill_dirs) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -96,13 +75,13 @@ def test_shared_skills_explicit_wins_over_content(
 # ---------------------------------------------------------------------------
 
 
-def test_content_skills_visible_via_mcp(
+def test_shared_skills_visible_via_mcp(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    content = tmp_path / "shared"
-    _write_skill(content / "skills", "shared-widget", "A shared widget skill")
+    shared = tmp_path / "shared_skills"
+    _write_skill(shared, "shared-widget", "A shared widget skill")
 
-    cfg = _CONFIG_WITH_CONTENT.format(content=content.as_posix())
+    cfg = f'skill_folders = ["{shared.as_posix()}", ".agents/skills"]\n'
     root = _make_project(tmp_path, cfg, monkeypatch)
     configure_for_tests(root)
 
@@ -111,13 +90,13 @@ def test_content_skills_visible_via_mcp(
     assert "shared-widget" in names
 
 
-def test_project_skill_wins_over_content_skill(
+def test_last_folder_wins_on_collision(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    content = tmp_path / "shared"
-    _write_skill(content / "skills", "my-skill", "Shared version")
+    shared = tmp_path / "shared_skills"
+    _write_skill(shared, "my-skill", "Shared version")
 
-    cfg = _CONFIG_WITH_CONTENT.format(content=content.as_posix())
+    cfg = f'skill_folders = ["{shared.as_posix()}", ".agents/skills"]\n'
     root = _make_project(tmp_path, cfg, monkeypatch)
     _write_skill(root / ".agents" / "skills", "my-skill", "Project version")
     configure_for_tests(root)
@@ -127,9 +106,10 @@ def test_project_skill_wins_over_content_skill(
     assert "Project version" in match["description"]
 
 
-def test_no_content_dir_works_normally(
+def test_no_extra_folders_works_normally(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    root = _make_project(tmp_path, _CONFIG_NO_CONTENT, monkeypatch)
+    cfg = 'skill_folders = [".agents/skills"]\n'
+    root = _make_project(tmp_path, cfg, monkeypatch)
     app = init_app(root)
-    assert app.shared_skills_dir is None
+    assert len(app.skill_dirs) == 1

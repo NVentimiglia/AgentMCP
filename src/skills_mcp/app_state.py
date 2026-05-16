@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -13,11 +14,9 @@ class AppContext:
 
     root: Path
     config: AgentConfig
-    skills_dir: Path
-    shared_skills_dir: Path | None
+    #: Resolved skill directories in priority order (last = highest priority).
+    skill_dirs: list[Path]
     state_dir: Path
-    #: Path to .agents/AGENT.md if present — single-file behavioral rules source.
-    agent_md: Path | None = None
 
 
 _APP: AppContext | None = None
@@ -25,33 +24,23 @@ _APP: AppContext | None = None
 
 def init_app(root: Path) -> AppContext:
     cfg = load_config(root)
-    from skills_mcp.config_paths import resolve_content_dir, resolve_shared_skills_dir
-
     resolved_root = root.resolve()
 
-    # Resolve content bundle (skills/ subdirectory).
-    content_dir = resolve_content_dir(resolved_root, cfg.paths.content)
+    skill_dirs = [resolve_path(resolved_root, f) for f in cfg.skill_folders]
 
-    # shared_skills: explicit config wins; fall back to content/skills/.
-    if cfg.paths.shared_skills:
-        ss = resolve_shared_skills_dir(resolved_root, cfg.paths.shared_skills)
-    elif content_dir is not None:
-        sub = content_dir / "skills"
-        ss = sub if sub.is_dir() else None
-    else:
-        ss = None
-
-    # Detect .agents/AGENT.md — single-file behavioral rules source.
-    agent_md_path = resolved_root / ".agents" / "AGENT.md"
+    # Prepend the global skills library if provided (lowest priority — project skills win).
+    library_env = os.environ.get("SKILLS_MCP_LIBRARY")
+    if library_env:
+        library_path = Path(library_env).resolve()
+        if library_path.is_dir() and library_path not in skill_dirs:
+            skill_dirs = [library_path] + skill_dirs
 
     global _APP
     _APP = AppContext(
         root=resolved_root,
         config=cfg,
-        skills_dir=resolve_path(resolved_root, cfg.paths.skills),
-        shared_skills_dir=ss,
+        skill_dirs=skill_dirs,
         state_dir=(resolved_root / "state").resolve(),
-        agent_md=agent_md_path if agent_md_path.is_file() else None,
     )
     return _APP
 

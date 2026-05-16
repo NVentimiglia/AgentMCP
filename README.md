@@ -1,142 +1,71 @@
 # SkillMCP
 
-Serves skills and behavioral rules (AGENT.md) to AI agents.
+Serves project-specific skills and behavioral rules to AI agents via MCP.
 
 Works with Claude Code, Gemini CLI, Cursor, and Antigravity.
 
-Prevents your project from looking like the [Cursed Repo](https://github.com/Hacksore/cursed-repo).
+Pairs well with [LearnSkill](https://github.com/NVentimiglia/LearnSkill) (behavioral auditing) and [claude-mem](https://github.com/thedotmack/claude-mem) (long-term memory).
 
 ---
 
-## What it does
+## Quick Start
 
-Injects knowledge into every agent session via MCP:
+```bash
+cd /path/to/project
+skills-mcp init .    # scaffold .agents/ skills and rules
+```
 
-| What | Source | How the agent gets it |
+Restart your agent host to pick up the new skills and rules.
+
+---
+
+## How it works
+
+Injects knowledge into every agent session automatically via the MCP instruction block.
+
+| Feature | Source | Interaction |
 |---|---|---|
-| **Behavioral rules** | `.agents/AGENT.md` | Auto-injected into MCP instructions every session |
-| **Skills** | `.agents/skills/` (global + project-local) | Agent calls `list_skills` / `read_skill` on demand |
+| **Behavioral Rules** | `.agents/AGENT.md` | Injected into the system prompt automatically |
+| **Skill Library** | `.agents/skills/` | Agent calls `list_skills` / `read_skill` as needed |
+| **Project Overrides** | `skillmcp.toml` | Local skills override global on name collision |
 
 ---
 
 ## Setup
 
-```bash
-# 1. Install (run once from the SkillMCP directory)
-cd SkillMCP
-uv sync
+1. **Install**
+   ```bash
+   cd SkillMCP && uv sync
+   ```
 
-# 2. Initialise in your project (run once per project)
-skills-mcp init .    # scaffold .agents/, register MCP with all hosts
-skills-mcp doctor    # verify layout and registration
-```
+2. **Initialize**
+   ```bash
+   skills-mcp init .
+   ```
 
-Restart your agent host once after `init` to pick up the MCP registration.
+3. **Configure**
+   Edit `skillmcp.toml` to add external skill folders. Last entry wins on collision.
 
----
-
-## MCP Tools
-
-| Tool | Description |
-|---|---|
-| `verify_setup` | Health snapshot: paths, skill counts, issues |
-| `list_skills([project_path])` | Global + local skill metadata |
-| `read_skill(name[, project_path])` | Full Markdown for one skill; local wins over global |
-
-### AGENT.md
-
-`.agents/AGENT.md` is plain Markdown — no special syntax. Injected automatically into every session's MCP instructions. Edit it to define how agents should behave globally.
-
-### Skills
-
-Each skill is a folder under `.agents/skills/<name>/SKILL.md` with YAML frontmatter (`name`, `description`).
-
-Project-local skills (in `<project>/.agents/skills/`) merge with global. Local wins on name collision.
+   ```toml
+   skill_folders = [
+       "/path/to/shared/skills", 
+       ".agents/skills",
+   ]
+   ```
 
 ---
 
-## CLI
+## CLI Reference
 
 | Command | Description |
 |---|---|
-| `skills-mcp init [path]` | Scaffold `.agents/`, config.toml, register MCP with all hosts |
-| `skills-mcp serve` | Run MCP server over stdio (started automatically by host agents) |
-| `skills-mcp doctor` | Verify layout and MCP registration |
-| `skills-mcp mcp register` | Re-register with Claude Code, Gemini, Cursor, Antigravity |
-
----
-
-## Host Support
-
-| Host | MCP registration |
-|---|---|
-| **Claude Code** | `~/.claude/settings.json` |
-| **Gemini CLI** | `~/.gemini/settings.json` |
-| **Cursor** | `~/.cursor/mcp.json` |
-| **Antigravity** | `~/.antigravity/mcp.json` and `~/.gemini/antigravity/mcp_config.json` |
+| `init [path]` | Scaffold `.agents/`, `skillmcp.toml`, `AGENT.md`, register MCP |
+| `doctor` | Verify directory layout and MCP registration |
+| `mcp register` | Re-register with all agent hosts (Claude, Gemini, etc.) |
 
 ---
 
 ## Troubleshooting
 
-### `SKILLS_MCP_ROOT points to invalid path`
-
-The MCP host is using a stale config that references an old project path (e.g. after renaming or moving the project directory).
-
-**Fix:** re-register from the correct project root:
-
-```bash
-cd /path/to/SkillMCP
-skills-mcp mcp register
-```
-
-Then restart the agent host to pick up the new config.
-
-**If the error persists**, the host may be reading from a config file that `mcp register` doesn't know about. Check all registration locations manually:
-
-| Host | Files to check |
-|---|---|
-| Claude Code | `~/.claude/settings.json` |
-| Gemini CLI | `~/.gemini/settings.json` |
-| Cursor | `~/.cursor/mcp.json` |
-| Antigravity | `~/.antigravity/mcp.json`, `~/.gemini/antigravity/mcp_config.json` |
-
-Each file should have a `skills-mcp` entry under `mcpServers` with:
-- `command` pointing to your Python executable
-- `args`: `["-m", "skills_mcp", "serve", "--root", "/path/to/SkillMCP"]`
-- `env.SKILLS_MCP_ROOT` set to the same `/path/to/SkillMCP`
-
-### `Could not find config.toml` (auto-discovery)
-
-The server was launched without `--root` and couldn't locate the project. This happens when:
-- The host config uses `command: "skills-mcp"` with no `--root` arg and no `SKILLS_MCP_ROOT` env
-- The working directory at launch has no `config.toml` in any parent
-
-**Fix:** ensure the config entry passes `--root` explicitly or sets `SKILLS_MCP_ROOT`. Run `skills-mcp mcp register` to rewrite all configs in the correct format.
-
----
-
-## Configuration (`config.toml`)
-
-```toml
-[paths]
-skills = ".agents/skills"
-
-# Optional: shared content folder with a skills/ subdirectory
-# content = ".libraries"
-
-# Optional: secondary skills repo (merged; project wins on collision)
-# shared_skills = "path/to/shared"
-```
-
----
-
-## Key Files
-
-| Path | Purpose |
-|---|---|
-| `.agents/AGENT.md` | Behavioral rules — injected every session |
-| `.agents/skills/` | Global skill packages |
-| `<project>/.agents/skills/` | Project-local skills |
-| `config.toml` | Paths config |
-| `CLAUDE.md` | Bootstrap instructions for Claude Code |
+- **Stale Paths**: If you move your project, run `skills-mcp mcp register` from the new location to update absolute paths in the MCP configs.
+- **Missing Skills**: Run `skills-mcp doctor` to see exactly which `skillmcp.toml` is being discovered and how many skills were found.
