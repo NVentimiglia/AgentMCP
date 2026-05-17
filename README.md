@@ -12,7 +12,7 @@ Pairs well with [LearnSkill](https://github.com/NVentimiglia/LearnSkill) (behavi
 
 ```bash
 cd /path/to/project
-skills-mcp init .    # scaffold .agents/ skills and rules
+skills-mcp init .    # scaffold .agents/ skills
 ```
 
 Restart your agent host to pick up the new skills.
