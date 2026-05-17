@@ -1,2 +1,2 @@
-- Call `list_skills` at the start of every session to discover available skills.
-- Call `read_skill(name)` before implementing any pattern a skill covers.
+Call `list_skills` at the start of every session to discover available skills.
+Call `read_skill(name)` before implementing any pattern a skill covers.
