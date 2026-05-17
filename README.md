@@ -71,6 +71,47 @@ Markdown skill files the agent fetches with `list_skills` / `read_skill` as need
 
 ---
 
+## Telemetry & Metrics
+
+SkillMCP automatically tracks usage metrics to build a scalable dataset of agent behavior and skill utilization. Telemetry data is persisted to `telemetry.json` in your project root.
+
+### Telemetry Dataset (`telemetry.json`)
+
+Tracks sessions, tool counts, and skill access leaderboards:
+
+```json
+{
+  "TotalSessions": 100,
+  "TotalSkillCalls": 5,
+  "ToolCalls": {
+    "verify_setup": 10,
+    "list_skills": 12,
+    "read_skill": 5,
+    "skill_health": 1
+  },
+  "Skills": [
+    { "role-plan": 3 },
+    { "role-research": 2 }
+  ]
+}
+```
+
+### Health Diagnostics (`skill_health`)
+
+The server exposes a health-check tool `skill_health` that returns details about the server health and the sequence number of the current tool execution:
+
+```json
+{
+  "status": "healthy",
+  "call_number": 5,
+  "total_sessions": 100,
+  "total_skill_calls": 5,
+  "checked_at": "2026-05-17T16:00:00Z"
+}
+```
+
+---
+
 ## CLI Reference
 
 | Command | Description |

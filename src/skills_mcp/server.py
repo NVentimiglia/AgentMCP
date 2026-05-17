@@ -36,6 +36,10 @@ def configure(root: Path | None = None) -> AppContext:
     _SKILLS.scan()
     agent_md = _load_agent_md(_APP.agent_dirs)
     mcp._mcp_server.instructions = render_mcp_seed_text(agent_md_content=agent_md)
+
+    from skills_mcp.telemetry import record_session
+    record_session(_APP.root)
+
     return _APP
 
 
@@ -70,6 +74,8 @@ def _run_traced(
 ) -> str:
     """Execute tool function."""
     _skills, app = _require_runtime()
+    from skills_mcp.telemetry import record_tool_call
+    record_tool_call(app.root, tool_name)
     return fn()
 
 
@@ -153,6 +159,8 @@ def list_skills(project_path: str = "", session_note: str = "") -> str:
 
 def _impl_read_skill(name: str, project_path: str, usage_reason: str) -> str:
     skills, app = _require_runtime()
+    from skills_mcp.telemetry import record_skill_access
+    record_skill_access(app.root, name)
     local_idx = _local_skill_index(project_path, app)
     if local_idx is not None:
         try:
@@ -172,6 +180,31 @@ def read_skill(name: str, project_path: str = "", usage_reason: str = "", sessio
     then falls back to global skills.
     """
     return _run_traced("read_skill", lambda: _impl_read_skill(name, project_path, usage_reason))
+
+
+def _impl_skill_health() -> str:
+    skills, app = _require_runtime()
+    from skills_mcp.telemetry import _load_telemetry
+    
+    file_path = app.root / "telemetry.json"
+    data = _load_telemetry(file_path)
+    
+    call_number = data.get("ToolCalls", {}).get("skill_health", 0)
+    
+    report = {
+        "status": "healthy",
+        "call_number": call_number,
+        "total_sessions": data.get("TotalSessions", 0),
+        "total_skill_calls": data.get("TotalSkillCalls", 0),
+        "checked_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    return json.dumps(report, indent=2, ensure_ascii=False)
+
+
+@mcp.tool()
+def skill_health(session_note: str = "") -> str:
+    """Check health of the SkillsMCP server and return invocation sequence info."""
+    return _run_traced("skill_health", _impl_skill_health)
 
 
 def run_stdio_server(root: Path | None = None) -> None:
