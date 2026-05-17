@@ -132,7 +132,7 @@ no shared state).
 
 ---
 
-## Phase 6 · Design Doc (agent-facing)
+## Phase 6 · Plan Design (agent-facing)
 
 Terse. Structured for execution. Written after user approves Phase 4.
 
@@ -149,7 +149,7 @@ Terse. Structured for execution. Written after user approves Phase 4.
 
 ---
 
-## Phase 7 · README (human-facing)
+## Phase 7 · Plan Summary (human-facing)
 
 Readable. No implementation detail.
 
