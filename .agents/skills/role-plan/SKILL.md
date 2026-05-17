@@ -25,10 +25,6 @@ Produce a plan. Do not write or modify source code.
 Wait for explicit user approval before any execution begins.
 When requirements or root causes are unclear, invoke `role-research` first.
 
-The planner is a **cautious lead** — it asks before committing,
-warns before overbuilding, and prefers doing less with higher confidence
-over doing more with lower confidence.
-
 ---
 
 ## Phase 0 · Convention Audit
@@ -41,9 +37,9 @@ Before designing anything, read the project to understand its rules:
 - Identify the test strategy (unit, integration, e2e) and test file locations.
 - Note any style or lint config that constrains implementation choices.
 
-Record findings as bullets with citations (file path + line).
-Do not proceed to Phase 1 until conventions are understood.
-If no project exists yet, ask the user to confirm intended conventions.
+Rules:
+- Record findings as bullets with citations (file path + line).
+- Flag and contradictions or choices as questions for the user.
 
 ---
 
@@ -132,33 +128,22 @@ no shared state).
 
 ---
 
-## Phase 6 · Plan Design (agent-facing)
+## Phase 6 · Plan Design
 
 Terse. Structured for execution. Written after user approves Phase 4.
 
 - Executive summary — one sentence.
+- One-paragraph overview: what was built and why.
+- Feature list or capability summary.
+- Usage examples or user journeys.
 - Goals — what this solves.
 - Non-goals — what is deferred or out of scope.
-- Architecture — named pattern + ASCII diagram if non-trivial.
-- Layer map — which layer each phase touches.
+- Diagram — named pattern + ASCII diagram if non-trivial.
 - Contracts — interfaces, schemas, or DTOs defined first.
 - Phases with numbered tasks (T0.1, T1.1, …). Each task is one
   atomic, verifiable unit tied to one layer and one assignee.
 - Stop conditions — when to halt and prompt the user.
 - Verification plan — tests and manual steps that confirm success.
-
----
-
-## Phase 7 · Plan Summary (human-facing)
-
-Readable. No implementation detail.
-
-- One-paragraph overview: what was built and why.
-- Architecture diagram if helpful.
-- Install or setup steps if applicable.
-- Feature list or capability summary.
-- Usage examples or user journeys.
-- Troubleshooting section if failure modes are non-obvious.
 
 ---
 
