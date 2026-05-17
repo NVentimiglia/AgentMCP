@@ -15,7 +15,7 @@ cd /path/to/project
 skills-mcp init .    # scaffold .agents/ skills and rules
 ```
 
-Restart your agent host to pick up the new skills and rules.
+Restart your agent host to pick up the new skills.
 
 ---
 
