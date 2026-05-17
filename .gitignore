@@ -22,6 +22,4 @@ state/
 .skills-mcp/
 
 # Project-specific skill exclusions
-/skills/scott-plot
-/skills/skia
 /.agents/skills/learn
